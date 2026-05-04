@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import styles from './CardGenerator.module.css';
 
 export default function CardGenerator() {
@@ -14,6 +14,12 @@ export default function CardGenerator() {
   const [resultImage, setResultImage] = useState('');
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
 
+  // Text Overlay States
+  const [overlayText, setOverlayText] = useState('');
+  const [overlayColor, setOverlayColor] = useState('#ffffff');
+  
+  const imgRef = useRef<HTMLImageElement>(null);
+
   const handleFetchImages = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!instagramUrl) return;
@@ -22,6 +28,7 @@ export default function CardGenerator() {
     setStatusText('인스타그램에서 이미지를 추출하는 중...');
     setExtractedImages([]);
     setResultImage('');
+    setOverlayText('');
     
     try {
       const igRes = await fetch('/api/instagram', {
@@ -48,7 +55,7 @@ export default function CardGenerator() {
     if (extractedImages.length === 0) return;
 
     setGenerating(true);
-    setStatusText('AI로 이미지를 변환하는 중...');
+    setStatusText('AI(GPT-4V)가 이미지를 분석하고 배경을 생성하는 중...');
     
     try {
       const imageUrl = extractedImages[selectedImageIndex];
@@ -63,7 +70,7 @@ export default function CardGenerator() {
       if (!aiRes.ok) throw new Error(aiData.error || 'Failed to transform image');
 
       setResultImage(aiData.transformedUrl);
-      setStatusText('카드 뉴스 생성 완료!');
+      setStatusText('카드 뉴스 배경 생성 완료! 텍스트를 오버레이 해보세요.');
 
     } catch (error: any) {
       console.error(error);
@@ -73,7 +80,7 @@ export default function CardGenerator() {
     }
   };
 
-  const downloadImage = async (imageUrl: string, index: number) => {
+  const downloadOriginalImage = async (imageUrl: string, index: number) => {
     try {
       const response = await fetch(imageUrl);
       const blob = await response.blob();
@@ -89,6 +96,68 @@ export default function CardGenerator() {
     } catch (err) {
       console.error("Download failed:", err);
       alert("다운로드에 실패했습니다.");
+    }
+  };
+
+  const downloadWithText = async () => {
+    if (!resultImage || !imgRef.current) return;
+    
+    try {
+      setStatusText('이미지 합성 중...');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = resultImage;
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+
+      if (overlayText) {
+        // Draw text
+        const fontSize = Math.floor(canvas.width * 0.08); // responsive font size
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.fillStyle = overlayColor;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Add text shadow for readability
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+
+        const lines = overlayText.split('\n');
+        const lineHeight = fontSize * 1.2;
+        const totalHeight = lines.length * lineHeight;
+        let startY = (canvas.height - totalHeight) / 2 + (lineHeight / 2);
+
+        lines.forEach(line => {
+          ctx.fillText(line, canvas.width / 2, startY);
+          startY += lineHeight;
+        });
+      }
+
+      const blobUrl = canvas.toDataURL('image/png');
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `cardnews_generated.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      setStatusText('다운로드 완료!');
+    } catch (err) {
+      console.error("Composite download failed:", err);
+      alert("합성 이미지 다운로드에 실패했습니다. (CORS 문제일 수 있습니다)");
     }
   };
 
@@ -137,7 +206,7 @@ export default function CardGenerator() {
                     className={styles.downloadSmallBtn}
                     onClick={(e) => {
                       e.stopPropagation();
-                      downloadImage(img, index);
+                      downloadOriginalImage(img, index);
                     }}
                   >
                     다운로드
@@ -175,7 +244,7 @@ export default function CardGenerator() {
                 disabled={generating || !theme}
                 onClick={handleGenerate}
               >
-                {generating ? <span className={styles.loader}></span> : '선택한 이미지로 AI 카드뉴스 생성'}
+                {generating ? <span className={styles.loader}></span> : '선택한 이미지로 AI 카드뉴스 생성 (GPT-4V 적용)'}
               </button>
             </div>
           </div>
@@ -187,13 +256,44 @@ export default function CardGenerator() {
         <div className={styles.imageContainer}>
           {resultImage ? (
             <div className={styles.resultWrapper}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={resultImage} alt="Generated Card News" className={styles.generatedImage} />
+              <div className={styles.overlayContainer}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img ref={imgRef} src={resultImage} alt="Generated Card News" className={styles.generatedImage} crossOrigin="anonymous" />
+                {overlayText && (
+                  <div className={styles.textOverlay} style={{ color: overlayColor }}>
+                    {overlayText.split('\n').map((line, i) => (
+                      <div key={i}>{line}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className={styles.overlayControls}>
+                <div className={styles.formGroup}>
+                  <label className="label">텍스트 오버레이</label>
+                  <textarea 
+                    className={`input-field ${styles.textareaSmall}`} 
+                    placeholder="카드뉴스에 들어갈 텍스트 입력..." 
+                    value={overlayText}
+                    onChange={(e) => setOverlayText(e.target.value)}
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className="label">텍스트 색상</label>
+                  <input 
+                    type="color" 
+                    value={overlayColor}
+                    onChange={(e) => setOverlayColor(e.target.value)}
+                    className={styles.colorPicker}
+                  />
+                </div>
+              </div>
+
               <button 
-                onClick={() => downloadImage(resultImage, 999)} 
+                onClick={downloadWithText} 
                 className={`btn-primary ${styles.downloadBtn}`}
               >
-                카드 뉴스 다운로드
+                이미지 저장하기
               </button>
             </div>
           ) : (

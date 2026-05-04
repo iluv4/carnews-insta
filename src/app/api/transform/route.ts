@@ -14,19 +14,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Theme is required' }, { status: 400 });
     }
 
-    // We are using GPT-Image-2 for text-to-image generation based on the theme and reference style.
-    // In a full production app, you might first pass the `imageUrl` to GPT-4V to get a text description, 
-    // and then blend that description with the theme for the GPT-Image-2 prompt.
-    
-    const prompt = `Create a high-quality vertical background image for a social media card news post. 
-    Theme: ${theme}. 
-    Aesthetic Style: ${reference}. 
-    The image should be visually striking, modern, and leave some negative space for text overlay. Do not include actual text.`;
-
-    // Check if we have a real API key
     if (!process.env.OPENAI_API_KEY) {
       console.warn('No OPENAI_API_KEY found. Returning a simulated generated image.');
-      // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 3000));
       return NextResponse.json({ 
         transformedUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=1000&auto=format&fit=crop',
@@ -34,6 +23,41 @@ export async function POST(req: Request) {
       });
     }
 
+    // 1. Analyze the original image using GPT-4o (Vision)
+    let imageAnalysis = "An Instagram post image.";
+    if (imageUrl) {
+      try {
+        const visionResponse = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Describe the core subject, colors, and mood of this image briefly in one sentence so it can be used as a prompt." },
+                {
+                  type: "image_url",
+                  image_url: { url: imageUrl },
+                },
+              ],
+            },
+          ],
+          max_tokens: 100,
+        });
+        imageAnalysis = visionResponse.choices[0].message.content || imageAnalysis;
+      } catch (visionError) {
+        console.error("GPT-4V Error:", visionError);
+        // Continue even if vision fails
+      }
+    }
+
+    // 2. Blend description into GPT-Image-2 prompt
+    const prompt = `Create a high-quality vertical background image for a social media card news post. 
+    Original Image Context: ${imageAnalysis}
+    Theme: ${theme}. 
+    Aesthetic Style: ${reference}. 
+    The image should be visually striking, modern, and leave negative space for text overlay. Do not include actual text.`;
+
+    // 3. Generate image with GPT-Image-2
     const response = await openai.images.generate({
       model: "gpt-image-2",
       prompt: prompt,
