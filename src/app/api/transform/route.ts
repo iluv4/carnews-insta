@@ -33,9 +33,9 @@ export async function POST(req: Request) {
     Aesthetic Style: ${reference || 'modern'}. 
     The image should be visually striking, match the extracted structure, and leave negative space for text overlay. Do not include actual text.`;
 
-    // 3. Generate image with GPT-Image-2
+    // 3. Generate image with dall-e-3 (using as fallback for gpt-image-2 verification issues)
     const response = await openai.images.generate({
-      model: "gpt-image-2",
+      model: "dall-e-3",
       prompt: prompt,
       n: 1,
       size: "1024x1792", // Vertical aspect ratio for card news
