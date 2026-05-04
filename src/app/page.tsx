@@ -1,66 +1,22 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import CardGenerator from "@/components/CardGenerator";
 
 export default function Home() {
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", padding: "64px 24px" }}>
+      <div style={{ textAlign: "center", marginBottom: "48px", animation: "fadeIn 0.8s ease-out" }}>
+        <h1 style={{ fontSize: "3rem", fontWeight: "700", marginBottom: "16px", background: "linear-gradient(135deg, #f8fafc, #94a3b8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+          InstaCard AI
+        </h1>
+        <p style={{ fontSize: "1.125rem", color: "var(--text-secondary)", maxWidth: "600px", margin: "0 auto", lineHeight: "1.6" }}>
+          Transform your Instagram photos into stunning, themed card news in seconds using the power of AI.
+        </p>
+      </div>
+
+      <CardGenerator />
+      
+      <footer style={{ marginTop: "auto", paddingTop: "64px", color: "var(--text-secondary)", fontSize: "0.875rem" }}>
+        Powered by Next.js & OpenAI DALL-E 3
+      </footer>
+    </main>
   );
 }
