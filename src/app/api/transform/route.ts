@@ -8,10 +8,10 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { imageUrl, theme, reference } = await req.json();
+    const { jsonlAnalysis, theme, reference } = await req.json();
 
-    if (!theme) {
-      return NextResponse.json({ error: 'Theme is required' }, { status: 400 });
+    if (!jsonlAnalysis) {
+      return NextResponse.json({ error: 'JSONL Analysis data is required' }, { status: 400 });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -24,39 +24,14 @@ export async function POST(req: Request) {
       });
     }
 
-    // 1. Analyze the original image using GPT-4o (Vision)
-    let imageAnalysis = "An Instagram post image.";
-    if (imageUrl) {
-      try {
-        const visionResponse = await openai.chat.completions.create({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: "Describe the core subject, colors, and mood of this image briefly in one sentence so it can be used as a prompt." },
-                {
-                  type: "image_url",
-                  image_url: { url: imageUrl },
-                },
-              ],
-            },
-          ],
-          max_tokens: 100,
-        });
-        imageAnalysis = visionResponse.choices[0].message.content || imageAnalysis;
-      } catch (visionError) {
-        console.error("GPT-4V Error:", visionError);
-        // Continue even if vision fails
-      }
-    }
-
-    // 2. Blend description into GPT-Image-2 prompt
+    // 2. Blend JSONL analysis into GPT-Image-2 prompt
     const prompt = `Create a high-quality vertical background image for a social media card news post. 
-    Original Image Context: ${imageAnalysis}
-    Theme: ${theme}. 
-    Aesthetic Style: ${reference}. 
-    The image should be visually striking, modern, and leave negative space for text overlay. Do not include actual text.`;
+    Imitate the layout and style described in this JSONL structure: 
+    ${jsonlAnalysis}
+
+    Additional Theme: ${theme || 'None'}. 
+    Aesthetic Style: ${reference || 'modern'}. 
+    The image should be visually striking, match the extracted structure, and leave negative space for text overlay. Do not include actual text.`;
 
     // 3. Generate image with GPT-Image-2
     const response = await openai.images.generate({

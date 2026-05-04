@@ -8,11 +8,15 @@ export default function CardGenerator() {
   const [theme, setTheme] = useState('');
   const [reference, setReference] = useState('modern');
   const [loading, setLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [statusText, setStatusText] = useState('');
+  
   const [extractedImages, setExtractedImages] = useState<string[]>([]);
-  const [resultImage, setResultImage] = useState('');
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
+  
+  const [jsonlData, setJsonlData] = useState('');
+  const [resultImage, setResultImage] = useState('');
 
   // Text Overlay States
   const [overlayText, setOverlayText] = useState('');
@@ -28,7 +32,7 @@ export default function CardGenerator() {
     setStatusText('인스타그램에서 이미지를 추출하는 중...');
     setExtractedImages([]);
     setResultImage('');
-    setOverlayText('');
+    setJsonlData('');
     
     try {
       const igRes = await fetch('/api/instagram', {
@@ -41,7 +45,7 @@ export default function CardGenerator() {
       if (!igRes.ok) throw new Error(igData.error || 'Failed to fetch IG images');
       
       setExtractedImages(igData.images);
-      setStatusText('이미지 추출 완료!');
+      setStatusText('이미지 추출 완료! 분석할 레퍼런스 이미지를 선택하세요.');
 
     } catch (error: any) {
       console.error(error);
@@ -51,26 +55,53 @@ export default function CardGenerator() {
     }
   };
 
-  const handleGenerate = async () => {
+  const handleAnalyze = async () => {
     if (extractedImages.length === 0) return;
 
-    setGenerating(true);
-    setStatusText('AI(GPT-4V)가 이미지를 분석하고 배경을 생성하는 중...');
+    setAnalyzing(true);
+    setStatusText('GPT-4o가 이미지를 분석하여 JSONL 데이터를 추출하는 중...');
     
     try {
       const imageUrl = extractedImages[selectedImageIndex];
 
+      const analyzeRes = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl })
+      });
+      const analyzeData = await analyzeRes.json();
+
+      if (!analyzeRes.ok) throw new Error(analyzeData.error || 'Failed to analyze image');
+
+      setJsonlData(analyzeData.analysis);
+      setStatusText('이미지 분석 완료! 아래 JSONL 데이터를 확인 후 변환을 진행하세요.');
+
+    } catch (error: any) {
+      console.error(error);
+      setStatusText(`Error: ${error.message}`);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!jsonlData) return;
+
+    setGenerating(true);
+    setStatusText('JSONL 데이터를 기반으로 카드뉴스를 모방/생성하는 중...');
+    
+    try {
       const aiRes = await fetch('/api/transform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl, theme, reference })
+        body: JSON.stringify({ jsonlAnalysis: jsonlData, theme, reference })
       });
       const aiData = await aiRes.json();
 
       if (!aiRes.ok) throw new Error(aiData.error || 'Failed to transform image');
 
       setResultImage(aiData.transformedUrl);
-      setStatusText('카드 뉴스 배경 생성 완료! 텍스트를 오버레이 해보세요.');
+      setStatusText('카드 뉴스 생성 완료! 텍스트를 오버레이 해보세요.');
 
     } catch (error: any) {
       console.error(error);
@@ -122,14 +153,12 @@ export default function CardGenerator() {
       ctx.drawImage(img, 0, 0);
 
       if (overlayText) {
-        // Draw text
-        const fontSize = Math.floor(canvas.width * 0.08); // responsive font size
+        const fontSize = Math.floor(canvas.width * 0.08); 
         ctx.font = `bold ${fontSize}px sans-serif`;
         ctx.fillStyle = overlayColor;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // Add text shadow for readability
         ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
         ctx.shadowBlur = 10;
         ctx.shadowOffsetX = 2;
@@ -157,7 +186,7 @@ export default function CardGenerator() {
       setStatusText('다운로드 완료!');
     } catch (err) {
       console.error("Composite download failed:", err);
-      alert("합성 이미지 다운로드에 실패했습니다. (CORS 문제일 수 있습니다)");
+      alert("합성 이미지 다운로드에 실패했습니다.");
     }
   };
 
@@ -214,51 +243,59 @@ export default function CardGenerator() {
                 </div>
               ))}
             </div>
+
+            <button 
+              type="button" 
+              className={`btn-primary ${styles.submitBtn}`}
+              disabled={analyzing}
+              onClick={handleAnalyze}
+            >
+              {analyzing ? <span className={styles.loader}></span> : '선택한 레퍼런스 이미지 분석 (JSONL 추출)'}
+            </button>
             
-            <div className={styles.aiForm}>
-              <div className={styles.formGroup}>
-                <label className="label">AI 변환 테마 (Theme)</label>
-                <textarea 
-                  className={`input-field ${styles.textarea}`} 
-                  placeholder="예: 사이버펑크, 모던한 기업 스타일..." 
-                  value={theme}
-                  onChange={(e) => setTheme(e.target.value)}
-                />
-              </div>
-              <div className={styles.formGroup}>
-                <label className="label">레퍼런스 스타일</label>
-                <select 
-                  className="input-field" 
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
+            {jsonlData && (
+              <div className={styles.aiForm}>
+                <div className={styles.formGroup}>
+                  <label className="label">분석된 JSONL 데이터 (수정 가능)</label>
+                  <textarea 
+                    className={`input-field ${styles.textarea}`} 
+                    value={jsonlData}
+                    onChange={(e) => setJsonlData(e.target.value)}
+                    style={{ fontFamily: 'monospace', height: '150px' }}
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className="label">추가 테마 (Theme - 선택)</label>
+                  <input 
+                    type="text"
+                    className="input-field" 
+                    placeholder="예: 사이버펑크, 모던한 기업 스타일..." 
+                    value={theme}
+                    onChange={(e) => setTheme(e.target.value)}
+                  />
+                </div>
+                <button 
+                  type="button" 
+                  className={`btn-primary ${styles.submitBtn}`}
+                  disabled={generating}
+                  onClick={handleGenerate}
                 >
-                  <option value="modern">Modern Minimalist</option>
-                  <option value="bold">Bold & Typography</option>
-                  <option value="gradient">Gradient & Glow</option>
-                  <option value="magazine">Magazine Editorial</option>
-                </select>
+                  {generating ? <span className={styles.loader}></span> : 'JSONL 데이터 기반 카드뉴스 모방 생성'}
+                </button>
               </div>
-              <button 
-                type="button" 
-                className={`btn-primary ${styles.submitBtn}`}
-                disabled={generating || !theme}
-                onClick={handleGenerate}
-              >
-                {generating ? <span className={styles.loader}></span> : '선택한 이미지로 AI 카드뉴스 생성 (GPT-4V 적용)'}
-              </button>
-            </div>
+            )}
           </div>
         )}
       </div>
 
       <div className={`glass-panel ${styles.previewPanel}`}>
-        <h2 className={styles.previewTitle}>AI 생성 결과 미리보기</h2>
+        <h2 className={styles.previewTitle}>AI 모방 생성 결과</h2>
         <div className={styles.imageContainer}>
           {resultImage ? (
             <div className={styles.resultWrapper}>
               <div className={styles.overlayContainer}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img ref={imgRef} src={resultImage} alt="Generated Card News" className={styles.generatedImage} crossOrigin="anonymous" />
+                <img ref={imgRef} src={`/api/proxy?url=${encodeURIComponent(resultImage)}`} alt="Generated Card News" className={styles.generatedImage} crossOrigin="anonymous" />
                 {overlayText && (
                   <div className={styles.textOverlay} style={{ color: overlayColor }}>
                     {overlayText.split('\n').map((line, i) => (
@@ -299,7 +336,7 @@ export default function CardGenerator() {
           ) : (
             <div className={styles.placeholder}>
               <div className={styles.placeholderIcon}>✨</div>
-              <p>AI로 변환된 카드뉴스가 여기에 표시됩니다</p>
+              <p>JSONL 기반으로 생성된 카드뉴스가 여기에 표시됩니다</p>
             </div>
           )}
         </div>
