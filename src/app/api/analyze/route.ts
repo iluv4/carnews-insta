@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     }
 
     const visionResponse = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5.5",
       messages: [
         {
           role: "user",
