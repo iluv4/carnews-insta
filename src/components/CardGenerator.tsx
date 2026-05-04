@@ -201,7 +201,7 @@ export default function CardGenerator() {
                   onClick={() => setSelectedImageIndex(index)}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img} alt={`Extracted ${index + 1}`} />
+                  <img src={`/api/proxy?url=${encodeURIComponent(img)}`} alt={`Extracted ${index + 1}`} />
                   <button 
                     className={styles.downloadSmallBtn}
                     onClick={(e) => {
