@@ -55,7 +55,7 @@ export async function POST(req: Request) {
           ],
         },
       ],
-      max_tokens: 1000,
+      max_completion_tokens: 1000,
     });
 
     const analysis = visionResponse.choices[0].message.content;
