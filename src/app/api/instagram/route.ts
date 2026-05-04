@@ -70,7 +70,7 @@ export async function POST(req: Request) {
 
     const shortcode = extractShortcode(url);
     if (!shortcode) {
-      return NextResponse.json({ error: 'Invalid Instagram shortcode format' }, { status: 400 });
+      return NextResponse.json({ error: '올바른 인스타그램 게시물 주소가 아닙니다. 주소를 다시 한번 확인해 주세요! (예: https://www.instagram.com/p/...)' }, { status: 400 });
     }
 
     const apiKey = process.env.RAPIDAPI_KEY;

@@ -91,21 +91,51 @@ export default function CardGenerator() {
     if (extractedImages.length === 0) return;
 
     setAnalyzing(true);
-    setStatusText('GPT-5.5가 디자인 레이아웃 분석 중...');
+    setStatusText('이미지 최적화 중...');
     
     try {
       const imageUrl = extractedImages[selectedImageIndex];
+      
+      // Client-side image compression to speed up AI analysis
+      const compressedImage = await new Promise<string>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = '/api/proxy?url=' + encodeURIComponent(imageUrl);
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 800; // Optimization: 800px is enough for analysis
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.7)); // 70% quality JPEG
+        };
+        img.onerror = reject;
+      });
+
+      setStatusText('GPT-5.5가 디자인 레이아웃 분석 중...');
+      const startTime = performance.now();
       const analyzeRes = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl })
+        body: JSON.stringify({ imageUrl: compressedImage }) // Send compressed base64
       });
       const analyzeData = await analyzeRes.json();
+      const endTime = performance.now();
+      const duration = ((endTime - startTime) / 1000).toFixed(2);
 
       if (!analyzeRes.ok) throw new Error(analyzeData.error || 'Failed to analyze image');
 
       setJsonlData(analyzeData.analysis);
-      setStatusText('스타일 학습 완료! 템플릿으로 저장하거나 바로 생성하세요.');
+      setStatusText(`스타일 학습 완료! (분석 시간: ${duration}초)`);
 
     } catch (error: any) {
       console.error(error);

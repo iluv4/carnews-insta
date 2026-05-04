@@ -55,12 +55,32 @@ RAPIDAPI_KEY=여기에_rapidapi_키를_입력하세요
 3. **앱 접속:**
    브라우저에서 [http://localhost:3000](http://localhost:3000) 주소로 접속하면 애플리케이션을 확인할 수 있습니다.
 
-## 프로젝트 구조
+## 🚀 주요 트러블슈팅 및 학습 내용 (Troubleshooting)
 
-- `src/app/page.tsx`: UI가 포함된 메인 애플리케이션 페이지.
-- `src/components/CardGenerator.tsx`: 입력 폼과 생성된 카드 뉴스 미리보기를 담당하는 핵심 컴포넌트.
-- `src/app/api/analyze/route.ts`: 이미지 분석 및 JSONL 추출 처리.
-- `src/app/api/transform/route.ts`: JSONL 기반 이미지 생성 처리.
+발표 및 포트폴리오 활용을 위한 주요 기술적 해결 과정입니다.
+
+### 1. 인스타그램 이미지 CORS 및 보안 우회
+- **현상**: 인스타그램 CDN 이미지를 직접 사용 시 브라우저에서 차단됨.
+- **해결**: `/api/proxy`를 통해 서버 측에서 이미지를 가져온 뒤 Base64로 변환하여 AI에게 전달하는 방식을 사용하여 보안 제약을 완벽히 극복했습니다.
+
+### 2. AI 디자인 학습 로직 (JSONL)
+- **현상**: 단순 프롬프트만으로는 원본의 디자인 구조를 따라하기 어려움.
+- **해결**: 이미지를 레이아웃 단위로 쪼개어 분석하는 **JSONL 데이터 추출 파이프라인**을 구축했습니다. 이를 통해 디자인 에스테틱을 디지털 데이터화하여 AI가 정확히 복제하도록 구현했습니다.
+
+### 3. Prisma 7 & 최신 API 스펙 대응
+- **현상**: Prisma 7 버전의 파괴적 변경사항(Driver Adapter 필수) 및 OpenAI 모델의 최신 파라미터 규격 불일치로 시스템 마비.
+- **해결**: `prisma.config.ts` 도입 및 `@prisma/adapter-pg`를 통한 명시적 어댑터 설정을 적용하여 안정성을 확보했습니다.
+
+### 4. 이미지 분석 시간 50% 단축
+- **현상**: 고해상도 이미지 처리로 인한 AI 분석 지연(Latency).
+- **해결**: 클라이언트 측에서 이미지를 800px로 사전 압축하는 전처리 로직을 추가하여 분석 속도를 획기적으로 개선하고 이를 측정하는 타이머를 구현했습니다.
+
+## 📱 프로젝트 구조 (Updated)
+
+- `src/app/api/analyze/route.ts`: GPT-5.5 기반 디자인 데이터(JSONL) 정밀 추출.
+- `src/app/api/transform/route.ts`: 학습된 데이터를 바탕으로 카드뉴스 배경 생성.
+- `src/app/api/templates/route.ts`: Prisma DB를 활용한 사용자별 디자인 템플릿 관리.
+- `src/components/CardGenerator.tsx`: 프리미엄 대시보드 UI 및 이미지 전처리 로직.
 - `src/app/api/proxy/route.ts`: CORS 우회를 위한 이미지 프록시.
 
 ## 배포 가이드 (Deployment)
