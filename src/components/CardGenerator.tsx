@@ -82,7 +82,7 @@ export default function CardGenerator() {
 
   const downloadOriginalImage = async (imageUrl: string, index: number) => {
     try {
-      const response = await fetch(imageUrl);
+      const response = await fetch('/api/proxy?url=' + encodeURIComponent(imageUrl));
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       
@@ -110,7 +110,7 @@ export default function CardGenerator() {
 
       const img = new Image();
       img.crossOrigin = "anonymous";
-      img.src = resultImage;
+      img.src = '/api/proxy?url=' + encodeURIComponent(resultImage);
       
       await new Promise((resolve, reject) => {
         img.onload = resolve;
