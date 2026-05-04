@@ -59,7 +59,19 @@ RAPIDAPI_KEY=여기에_rapidapi_키를_입력하세요
 
 - `src/app/page.tsx`: UI가 포함된 메인 애플리케이션 페이지.
 - `src/components/CardGenerator.tsx`: 입력 폼과 생성된 카드 뉴스 미리보기를 담당하는 핵심 컴포넌트.
-- `src/app/api/instagram/route.ts`: 인스타그램 URL 스크래핑을 처리하는 API 라우트.
-- `src/app/api/transform/route.ts`: OpenAI GPT-Image-2 프롬프트 및 이미지 생성 요청을 처리하는 API 라우트.
+- `src/app/api/analyze/route.ts`: 이미지 분석 및 JSONL 추출 처리.
+- `src/app/api/transform/route.ts`: JSONL 기반 이미지 생성 처리.
+- `src/app/api/proxy/route.ts`: CORS 우회를 위한 이미지 프록시.
+
+## 배포 가이드 (Deployment)
+
+이 프로젝트는 **Vercel**에 최적화되어 있습니다.
+
+1. **Vercel 회원가입/로그인** 후 [Vercel Dashboard](https://vercel.com/dashboard)로 이동합니다.
+2. **Add New > Project**를 클릭하고 이 레포지토리(`carnews-insta`)를 Import 합니다.
+3. **Environment Variables** 설정 섹션에서 다음 두 가지 키를 추가합니다:
+   - `OPENAI_API_KEY`: 발급받은 OpenAI API 키
+   - `RAPIDAPI_KEY`: 발급받은 RapidAPI 키
+4. **Deploy** 버튼을 누르면 배포가 시작됩니다! 배포가 완료되면 제공되는 `.vercel.app` 주소로 전 세계 어디서든 접속 가능합니다.
 
 
