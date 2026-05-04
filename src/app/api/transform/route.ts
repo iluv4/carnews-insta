@@ -24,14 +24,16 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. Blend JSONL analysis into GPT-Image-2 prompt
-    const prompt = `Create a high-quality vertical background image for a social media card news post. 
-    Imitate the layout and style described in this JSONL structure: 
+    // 2. Build prompt using JSONL analysis
+    const prompt = `Create a professional Instagram card news image based on this structural analysis:
     ${jsonlAnalysis}
-
-    Additional Theme: ${theme || 'None'}. 
+    
+    Theme: ${theme || 'General News'}. 
     Aesthetic Style: ${reference || 'modern'}. 
-    The image should be visually striking, match the extracted structure, and leave negative space for text overlay. Do not include actual text.`;
+    
+    IMPORTANT: Include the actual text content extracted in the analysis within the image itself. 
+    Ensure the typography is beautiful, matches the layout described, and is perfectly integrated into the design. 
+    The final image must look like a complete, ready-to-post card news with professional text placement.`;
 
     // 3. Generate image with dall-e-3 (using as fallback for gpt-image-2 verification issues)
     const response = await openai.images.generate({

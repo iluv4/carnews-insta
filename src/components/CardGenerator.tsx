@@ -394,19 +394,7 @@ export default function CardGenerator() {
 
                   {resultImage && (
                     <div className={styles.overlayEditor}>
-                      <h3 className={styles.subTitle}>텍스트 오버레이</h3>
-                      <textarea 
-                        className="input-field" 
-                        placeholder="카드뉴스에 들어갈 텍스트..." 
-                        value={overlayText}
-                        onChange={(e) => setOverlayText(e.target.value)}
-                        rows={3}
-                      />
-                      <div className={styles.colorRow}>
-                        <label className="label">텍스트 색상</label>
-                        <input type="color" value={overlayColor} onChange={(e) => setOverlayColor(e.target.value)} className={styles.colorPicker} />
-                      </div>
-                      <button onClick={downloadWithText} className={`btn-primary ${styles.actionBtn}`}>이미지 합성 및 저장</button>
+                      <button onClick={downloadWithText} className={`btn-primary ${styles.bigBtn}`}>최종 이미지 다운로드</button>
                     </div>
                   )}
                 </section>
@@ -419,16 +407,11 @@ export default function CardGenerator() {
                       <div className={styles.previewWrapper}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img ref={imgRef} src={`/api/proxy?url=${encodeURIComponent(resultImage)}`} alt="Generated" className={styles.finalImage} crossOrigin="anonymous" />
-                        {overlayText && (
-                          <div className={styles.textOverlay} style={{ color: overlayColor }}>
-                            {overlayText.split('\n').map((line, i) => <div key={i}>{line}</div>)}
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <div className={styles.previewPlaceholder}>
                         <div className={styles.pulseIcon}>🎨</div>
-                        <p>생성된 결과가 여기에 표시됩니다.</p>
+                        <p>AI가 텍스트까지 완벽하게 배치한 결과가 여기에 표시됩니다.</p>
                       </div>
                     )}
                   </div>
