@@ -14,12 +14,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Theme is required' }, { status: 400 });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn('No OPENAI_API_KEY found. Returning a simulated generated image.');
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey || apiKey === 'your_openai_api_key_here' || apiKey === 'dummy_key') {
+      console.warn('No valid OPENAI_API_KEY found. Returning a simulated generated image.');
       await new Promise(resolve => setTimeout(resolve, 3000));
       return NextResponse.json({ 
         transformedUrl: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=1000&auto=format&fit=crop',
-        warning: 'Simulated response. Please add OPENAI_API_KEY.'
+        warning: 'Simulated response. Please add a valid OPENAI_API_KEY.'
       });
     }
 
