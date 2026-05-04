@@ -15,7 +15,6 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey || apiKey === 'your_openai_api_key_here' || apiKey === 'dummy_key') {
-      // Return simulated JSONL data for preview
       const dummyJsonl = 
 `{"type":"background", "color":"#1a1a1a", "style":"gradient"}
 {"type":"title", "content":"카드뉴스 제목 예시", "color":"#ffffff", "position":"top-center", "fontSize":"large"}
@@ -24,6 +23,19 @@ export async function POST(req: Request) {
       
       await new Promise(resolve => setTimeout(resolve, 2000));
       return NextResponse.json({ analysis: dummyJsonl });
+    }
+
+    // Fetch image and convert to base64 to bypass OpenAI download errors
+    let base64Image;
+    try {
+      const imgRes = await fetch(imageUrl);
+      if (!imgRes.ok) throw new Error(`Failed to fetch image for analysis: ${imgRes.statusText}`);
+      const arrayBuffer = await imgRes.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      base64Image = `data:${imgRes.headers.get('content-type') || 'image/jpeg'};base64,${buffer.toString('base64')}`;
+    } catch (fetchError: any) {
+      console.error("Image Fetch Error:", fetchError);
+      return NextResponse.json({ error: `Error while downloading image: ${fetchError.message}` }, { status: 400 });
     }
 
     const visionResponse = await openai.chat.completions.create({
@@ -38,7 +50,7 @@ export async function POST(req: Request) {
             },
             {
               type: "image_url",
-              image_url: { url: imageUrl },
+              image_url: { url: base64Image },
             },
           ],
         },
