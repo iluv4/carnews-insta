@@ -41,7 +41,11 @@ export async function POST(req: Request) {
       size: "1024x1792", // Vertical aspect ratio for card news
     });
 
-    const transformedUrl = response.data[0].url;
+    const transformedUrl = response.data?.[0]?.url;
+
+    if (!transformedUrl) {
+      throw new Error('No image URL returned from OpenAI');
+    }
 
     return NextResponse.json({ transformedUrl });
 

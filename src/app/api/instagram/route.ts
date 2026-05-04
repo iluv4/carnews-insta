@@ -1,6 +1,64 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import * as cheerio from 'cheerio';
+
+const RAPIDAPI_HOST = "instagram120.p.rapidapi.com";
+
+function extractShortcode(url: string): string | null {
+  const match = url.match(/instagram\.com\/(?:[^/?#]+\/)?(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+  return match ? match[1] : null;
+}
+
+function normalizeMediaResponse(raw: unknown): {
+  items: Array<{
+    type: "image" | "video";
+    url: string;
+    thumbnail: string;
+    width?: number;
+    height?: number;
+    quality?: number;
+    extension: string;
+  }>;
+  meta: any;
+} {
+  const items: any[] = [];
+  let meta = {};
+
+  if (!raw || !Array.isArray(raw)) {
+    return { items, meta };
+  }
+
+  for (const entry of raw as Array<Record<string, unknown>>) {
+    if (entry.meta && typeof entry.meta === "object") {
+      meta = entry.meta;
+    }
+
+    const thumbnail = (entry.pictureUrl as string) ?? "";
+    const urls = Array.isArray(entry.urls) ? (entry.urls as Array<Record<string, unknown>>) : [];
+
+    if (urls.length === 0) {
+      if (thumbnail) {
+        items.push({ type: "image", url: thumbnail, thumbnail, extension: "jpg" });
+      }
+      continue;
+    }
+
+    // Pick best quality URL
+    const sorted = [...urls].sort((a, b) => ((b.quality as number) ?? 0) - ((a.quality as number) ?? 0));
+    const best = sorted[0];
+    const ext = (best.extension as string) ?? "jpg";
+    const isVideo = ext === "mp4" || (best.name as string | undefined)?.toLowerCase().includes("mp4");
+
+    items.push({
+      type: isVideo ? "video" : "image",
+      url: best.url as string,
+      thumbnail,
+      quality: best.quality as number | undefined,
+      extension: ext,
+    });
+  }
+
+  return { items, meta };
+}
 
 export async function POST(req: Request) {
   try {
@@ -10,38 +68,59 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid Instagram URL' }, { status: 400 });
     }
 
-    // Attempt to fetch the Instagram page
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      },
-      timeout: 10000,
-    });
-
-    const html = response.data;
-    const $ = cheerio.load(html);
-
-    // Extract the og:image meta tag
-    let imageUrl = $('meta[property="og:image"]').attr('content');
-
-    if (!imageUrl) {
-      // Instagram might block the request and return a login page without og:image.
-      // In a real production app, you would use a dedicated scraping API (like RapidAPI).
-      // For this demonstration, we'll return a placeholder if scraping fails.
-      console.warn('Failed to extract og:image. Instagram may be blocking the request.');
-      imageUrl = 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1000&auto=format&fit=crop';
+    const shortcode = extractShortcode(url);
+    if (!shortcode) {
+      return NextResponse.json({ error: 'Invalid Instagram shortcode format' }, { status: 400 });
     }
 
-    return NextResponse.json({ imageUrl });
+    const apiKey = process.env.RAPIDAPI_KEY;
+    if (!apiKey) {
+      console.warn('RAPIDAPI_KEY not found. Using fallback placeholder image.');
+      return NextResponse.json({ 
+        images: ['https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1000&auto=format&fit=crop'],
+        warning: 'Using fallback because RAPIDAPI_KEY is not configured.'
+      });
+    }
+
+    // Fetch from RapidAPI
+    const response = await axios.post(
+      `https://${RAPIDAPI_HOST}/api/instagram/mediaByShortcode`,
+      { shortcode },
+      {
+        headers: {
+          "x-rapidapi-key": apiKey,
+          "x-rapidapi-host": RAPIDAPI_HOST,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      }
+    );
+
+    const normalized = normalizeMediaResponse(response.data);
+    
+    // Extract only images for the frontend (to generate card news or download)
+    const images = normalized.items
+      .filter(item => item.type === 'image')
+      .map(item => item.url);
+
+    if (images.length === 0) {
+      // Fallback to thumbnail if no images found but video is present
+      const thumbnails = normalized.items.map(item => item.thumbnail).filter(Boolean);
+      if (thumbnails.length > 0) {
+        return NextResponse.json({ images: thumbnails });
+      }
+      return NextResponse.json({ error: 'No images found in this post' }, { status: 404 });
+    }
+
+    return NextResponse.json({ images, meta: normalized.meta });
 
   } catch (error: any) {
-    console.error('Error in Instagram API route:', error.message);
-    // Fallback image if totally blocked
+    console.error('Error in Instagram API route:', error?.response?.data || error.message);
+    
+    // Fallback if RapidAPI fails
     return NextResponse.json({ 
-      imageUrl: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1000&auto=format&fit=crop',
-      warning: 'Using fallback image due to Instagram blocking.'
+      images: ['https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1000&auto=format&fit=crop'],
+      warning: 'Using fallback image due to API failure.'
     });
   }
 }
