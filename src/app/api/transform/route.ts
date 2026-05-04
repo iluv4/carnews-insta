@@ -14,9 +14,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Theme is required' }, { status: 400 });
     }
 
-    // We are using DALL-E 2 for text-to-image generation based on the theme and reference style.
+    // We are using GPT-Image-2 for text-to-image generation based on the theme and reference style.
     // In a full production app, you might first pass the `imageUrl` to GPT-4V to get a text description, 
-    // and then blend that description with the theme for the DALL-E 2 prompt.
+    // and then blend that description with the theme for the GPT-Image-2 prompt.
     
     const prompt = `Create a high-quality vertical background image for a social media card news post. 
     Theme: ${theme}. 
@@ -35,10 +35,10 @@ export async function POST(req: Request) {
     }
 
     const response = await openai.images.generate({
-      model: "dall-e-2",
+      model: "gpt-image-2",
       prompt: prompt,
       n: 1,
-      size: "1024x1024", // DALL-E 2 max size
+      size: "1024x1792", // Vertical aspect ratio for card news
     });
 
     const transformedUrl = response.data[0].url;
