@@ -416,8 +416,68 @@
   filter: grayscale(0);
 }
 
-.sectionHeader {
+.imageSelectorSection {
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.subTitle {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+}
+
+.imageGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
   margin-bottom: 32px;
+}
+
+.imageItem {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.imageItem img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.imageItem.selectedImg {
+  border-color: var(--primary);
+  box-shadow: 0 0 15px var(--primary-glow);
+  transform: scale(1.03);
+}
+
+.actionGroup {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.secondaryBtn {
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.secondaryBtn:hover {
+  background: #f1f5f9;
+  color: #475569;
 }
 
 .pagination {

@@ -334,19 +334,22 @@ export default function CardGenerator() {
                 </div>
 
                 {extractedImages.length > 0 && (
-                  <div className={styles.imageGrid}>
-                    {extractedImages.map((img, i) => (
-                      <div 
-                        key={i} 
-                        className={`${styles.imageItem} ${selectedImageIndex === i ? styles.selectedImg : ''}`}
-                        onClick={() => setSelectedImageIndex(i)}
-                      >
-                        <img src={img} alt="Reference" />
-                      </div>
-                    ))}
+                  <div className={styles.imageSelectorSection}>
+                    <h3 className={styles.subTitle}>분석할 이미지를 선택하세요</h3>
+                    <div className={styles.imageGrid}>
+                      {extractedImages.map((img, i) => (
+                        <div 
+                          key={i} 
+                          className={`${styles.imageItem} ${selectedImageIndex === i ? styles.selectedImg : ''}`}
+                          onClick={() => setSelectedImageIndex(i)}
+                        >
+                          <img src={`/api/proxy?url=${encodeURIComponent(img)}`} alt="Reference" />
+                        </div>
+                      ))}
+                    </div>
                     <div className={styles.actionGroup}>
-                       <button className="btn-secondary" onClick={() => { setExtractedImages([]); setInstagramUrl(''); }}>초기화</button>
-                       <button className="btn-primary" onClick={() => handleAnalyze().then(() => setCurrentStep(2))}>이 스타일로 분석하기</button>
+                       <button className={styles.secondaryBtn} onClick={() => { setExtractedImages([]); setInstagramUrl(''); }}>초기화</button>
+                       <button className={styles.modernBtn} onClick={() => handleAnalyze().then(() => setCurrentStep(2))}>선택한 스타일 분석 시작</button>
                     </div>
                   </div>
                 )}
