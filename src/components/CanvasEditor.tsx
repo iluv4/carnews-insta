@@ -72,7 +72,7 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
     canvasInstance.discardActiveObject();
     canvasInstance.requestRenderAll();
     setTimeout(() => {
-      const dataURL = canvasInstance.toDataURL({ format: 'png', quality: 1 });
+      const dataURL = canvasInstance.toDataURL({ format: 'png', quality: 1, multiplier: 1 });
       const link = document.createElement('a');
       link.href = dataURL;
       link.download = `cardnews_${Date.now()}.png`;
