@@ -141,19 +141,57 @@
   box-shadow: var(--shadow-md);
 }
 
+.navDivider {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 24px 16px 8px;
+}
+
+.portalLinks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.portalItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.portalItem:hover {
+  background: #f1f5f9;
+  color: var(--primary);
+  transform: translateX(4px);
+}
+
+.portalIcon {
+  font-size: 1.1rem;
+}
+
 @media (max-width: 1024px) {
   .sidebar {
     width: 80px;
     padding: 32px 12px;
   }
-  .logoText, .userDetails {
+  .logoText, .userDetails, .navDivider {
     display: none;
   }
-  .navItem {
+  .navItem, .portalItem {
     justify-content: center;
     padding: 12px;
   }
-  .navItem span:last-child {
+  .navItem span:last-child, .portalItem span:last-child {
     display: none;
   }
 }

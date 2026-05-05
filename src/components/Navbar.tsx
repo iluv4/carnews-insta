@@ -10,11 +10,11 @@ export default function Navbar() {
 
   return (
     <aside className={styles.sidebar}>
-      <div className={styles.logo}>
+      <Link href="/" className={styles.logo}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png" alt="Logo" className={styles.logoImg} />
         <span className={styles.logoText}>CarNews <span className={styles.accent}>Insta</span></span>
-      </div>
+      </Link>
 
       <nav className={styles.navMenu}>
         <div 
@@ -37,6 +37,23 @@ export default function Navbar() {
         >
           <span className={styles.navIcon}>⚙️</span>
           설정 및 요금제
+        </div>
+
+        <div className={styles.navDivider}>클라이언트 포털</div>
+        
+        <div className={styles.portalLinks}>
+          <div className={styles.portalItem} onClick={() => setActiveTab('portal-buamdong')}>
+            <span className={styles.portalIcon}>🍲</span> 부암동 맛집 전용
+          </div>
+          <div className={styles.portalItem} onClick={() => setActiveTab('portal-insurance')}>
+            <span className={styles.portalIcon}>🛡️</span> 보험 설계 프로
+          </div>
+          <div className={styles.portalItem} onClick={() => setActiveTab('portal-beauty')}>
+            <span className={styles.portalIcon}>💄</span> 럭셔리 뷰티/코스메틱
+          </div>
+          <div className={styles.portalItem} onClick={() => setActiveTab('portal-studio')}>
+            <span className={styles.portalIcon}>📸</span> 감성 스튜디오/사진관
+          </div>
         </div>
       </nav>
 

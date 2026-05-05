@@ -29,7 +29,6 @@ export async function POST(req: Request) {
     }
 
     // 2. Build precision prompts based on Design DNA
-    // Trim analysis data to stay within OpenAI prompt limits (4000 chars total)
     const trimmedAnalysis = jsonlAnalysis.substring(0, 3000); 
     
     const basePrompt = `You are a world-class Graphic Designer and Art Director. 
@@ -55,24 +54,11 @@ export async function POST(req: Request) {
       `${basePrompt} Focus: Action Slide (Conclusion). Minimalist and strong visual anchor for: ${theme}`
     ];
 
-    // 3. Generate high-quality images with gpt-image-2 (User requested)
-    let responses;
-    try {
-      responses = await Promise.all(
-        prompts.map(prompt =>
-          openai.images.generate({
-            model: "gpt-image-2", // Explicitly using the requested model name
-            prompt,
-            n: 1,
-            size: "1024x1792",
-            quality: "hd",
-            style: "vivid",
-          })
-    // 3. Generate high-quality images with dall-e-3 (Enforced model)
-    let responses = await Promise.all(
+    // 3. Generate high-quality images with gpt-image-2 (User Enforced)
+    const responses = await Promise.all(
       prompts.map(prompt =>
         openai.images.generate({
-          model: "dall-e-3",
+          model: "gpt-image-2", 
           prompt,
           n: 1,
           size: "1024x1792",
