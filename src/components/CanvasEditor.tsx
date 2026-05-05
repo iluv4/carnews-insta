@@ -1,5 +1,7 @@
 'use client';
 
+import React, { useState, useRef, useEffect } from 'react';
+import * as fabric from 'fabric';
 import styles from './CanvasEditor.module.css';
 
 interface CanvasEditorProps {
@@ -13,8 +15,17 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
 
   // Settings state
   const [activeColor, setActiveColor] = useState('#ffffff');
+  const [activeStrokeColor, setActiveStrokeColor] = useState('#000000');
+  const [strokeWidth, setStrokeWidth] = useState(0);
+  const [letterSpacing, setLetterSpacing] = useState(0);
+  const [lineHeight, setLineHeight] = useState(1.1);
+  const [opacity, setOpacity] = useState(1);
   const [fontWeight, setFontWeight] = useState<'normal' | 'bold'>('bold');
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
+  const [fontFamily, setFontFamily] = useState('Pretendard, sans-serif');
+
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -23,34 +34,95 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
     const canvas = new fabric.Canvas(canvasRef.current, {
       width: 800,
       height: 800,
-      backgroundColor: '#f8fafc',
+      backgroundColor: '#f1f5f9',
       preserveObjectStacking: true
     });
+
+    // Figma-style Controls Theme
+    fabric.InteractiveObject.prototype.transparentCorners = false;
+    fabric.InteractiveObject.prototype.cornerColor = '#6366f1';
+    fabric.InteractiveObject.prototype.cornerStyle = 'circle';
+    fabric.InteractiveObject.prototype.cornerSize = 10;
+    fabric.InteractiveObject.prototype.borderColor = '#6366f1';
+    fabric.InteractiveObject.prototype.borderScaleFactor = 1.5;
+
     setCanvasInstance(canvas);
 
-    // Load Background Image with proxy to avoid CORS
+    // Keyboard Shortcuts
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeObject = canvas.getActiveObject();
+      
+      // Delete
+      if ((e.key === 'Delete' || e.key === 'Backspace') && activeObject && !(activeObject as any).isEditing) {
+        canvas.remove(activeObject);
+        canvas.discardActiveObject();
+        canvas.requestRenderAll();
+        saveHistory();
+      }
+
+      // Copy/Paste (Simple implementation)
+      if (e.ctrlKey && e.key === 'c' && activeObject) {
+        activeObject.clone().then((cloned: any) => {
+          (window as any)._clipboard = cloned;
+        });
+      }
+
+      if (e.ctrlKey && e.key === 'v' && (window as any)._clipboard) {
+        (window as any)._clipboard.clone().then((clonedObj: any) => {
+          canvas.discardActiveObject();
+          clonedObj.set({
+            left: clonedObj.left + 20,
+            top: clonedObj.top + 20,
+            evented: true,
+          });
+          if (clonedObj.type === 'activeSelection') {
+            clonedObj.canvas = canvas;
+            clonedObj.forEachObject((obj: any) => {
+              canvas.add(obj);
+            });
+            clonedObj.setCoords();
+          } else {
+            canvas.add(clonedObj);
+          }
+          canvas.setActiveObject(clonedObj);
+          canvas.requestRenderAll();
+          saveHistory();
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Load Background Image
     const imgElement = new Image();
     imgElement.crossOrigin = "anonymous";
     imgElement.src = `/api/proxy?url=${encodeURIComponent(imageUrl)}`;
     imgElement.onload = () => {
       canvas.setDimensions({ width: imgElement.width, height: imgElement.height });
-
       const fabricImg = new fabric.FabricImage(imgElement, {
         originX: 'left',
         originY: 'top',
         selectable: false,
         evented: false,
-        crossOrigin: 'anonymous'
       });
       canvas.backgroundImage = fabricImg;
       canvas.requestRenderAll();
+      saveHistory();
     };
 
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
       canvas.dispose();
       setCanvasInstance(null);
     };
   }, [imageUrl]);
+
+  const saveHistory = () => {
+    if (!canvasInstance) return;
+    const json = JSON.stringify(canvasInstance.toJSON());
+    setHistory(prev => [...prev.slice(0, historyIndex + 1), json]);
+    setHistoryIndex(prev => prev + 1);
+  };
 
   // Sync state with active selection
   useEffect(() => {
@@ -77,34 +149,34 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
   const addText = () => {
     if (!canvasInstance) return;
 
-    const text = new fabric.Textbox('여기에 내용을 입력하세요', {
+    const text = new fabric.Textbox('새로운 텍스트 입력', {
       left: canvasInstance.width! / 2,
       top: canvasInstance.height! / 2,
       originX: 'center',
       originY: 'center',
       width: canvasInstance.width! * 0.8,
-      fontSize: Math.floor(canvasInstance.width! * 0.07),
+      fontSize: 60,
       fill: activeColor,
       fontWeight: fontWeight,
       textAlign: textAlign,
-      fontFamily: 'Pretendard, sans-serif',
+      fontFamily: fontFamily,
+      charSpacing: letterSpacing,
+      lineHeight: lineHeight,
+      opacity: opacity,
+      stroke: strokeWidth > 0 ? activeStrokeColor : undefined,
+      strokeWidth: strokeWidth,
       shadow: new fabric.Shadow({
-        color: 'rgba(0,0,0,0.5)',
-        blur: 15,
-        offsetX: 3,
-        offsetY: 3
+        color: 'rgba(0,0,0,0.4)',
+        blur: 10,
+        offsetX: 2,
+        offsetY: 2
       }),
-      cornerColor: '#6366f1',
-      cornerStyle: 'circle',
-      cornerSize: 12,
-      transparentCorners: false,
-      borderColor: '#6366f1',
-      borderScaleFactor: 2
     });
 
     canvasInstance.add(text);
     canvasInstance.setActiveObject(text);
     canvasInstance.requestRenderAll();
+    saveHistory();
   };
 
   const deleteSelected = () => {
@@ -123,6 +195,26 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
     if (activeObject && activeObject.type === 'textbox') {
       activeObject.set(prop as any, value);
       canvasInstance.requestRenderAll();
+    }
+  };
+
+  const undo = () => {
+    if (historyIndex > 0 && canvasInstance) {
+      const prev = history[historyIndex - 1];
+      canvasInstance.loadFromJSON(JSON.parse(prev)).then(() => {
+        canvasInstance.requestRenderAll();
+        setHistoryIndex(prevIdx => prevIdx - 1);
+      });
+    }
+  };
+
+  const redo = () => {
+    if (historyIndex < history.length - 1 && canvasInstance) {
+      const next = history[historyIndex + 1];
+      canvasInstance.loadFromJSON(JSON.parse(next)).then(() => {
+        canvasInstance.requestRenderAll();
+        setHistoryIndex(prevIdx => prevIdx + 1);
+      });
     }
   };
 
@@ -145,13 +237,33 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
     <div className={styles.editorContainer}>
       <div className={styles.toolbar}>
         <div className={styles.toolGroup}>
+          <button onClick={undo} className={styles.btnIcon} disabled={historyIndex <= 0}>↩️</button>
+          <button onClick={redo} className={styles.btnIcon} disabled={historyIndex >= history.length - 1}>↪️</button>
+        </div>
+
+        <div className={styles.toolGroup}>
           <button onClick={addText} className={styles.btnAction}>
-            <span>+</span> 텍스트 추가
+            <span>+</span> 텍스트
           </button>
         </div>
 
         <div className={styles.toolGroup}>
-          <label className="label" style={{ marginBottom: 0, marginRight: '8px' }}>색상</label>
+          <select 
+            className={styles.select}
+            value={fontFamily}
+            onChange={(e) => {
+              setFontFamily(e.target.value);
+              updateActiveText('fontFamily', e.target.value);
+            }}
+          >
+            <option value="Pretendard, sans-serif">Pretendard</option>
+            <option value="'GmarketSansMedium', sans-serif">Gmarket Sans</option>
+            <option value="'Noto Sans KR', sans-serif">Noto Sans KR</option>
+            <option value="'Nanum Square', sans-serif">Nanum Square</option>
+          </select>
+        </div>
+
+        <div className={styles.toolGroup}>
           <input
             type="color"
             className={styles.colorPicker}
@@ -197,12 +309,38 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
           </button>
         </div>
 
+        <div className={styles.toolGroup}>
+          <label className={styles.toolLabel}>자간</label>
+          <input 
+            type="range" min="-100" max="500" step="10" 
+            value={letterSpacing}
+            onChange={(e) => {
+              const val = parseInt(e.target.value);
+              setLetterSpacing(val);
+              updateActiveText('charSpacing', val);
+            }}
+          />
+        </div>
+
+        <div className={styles.toolGroup}>
+          <label className={styles.toolLabel}>투명도</label>
+          <input 
+            type="range" min="0" max="1" step="0.1" 
+            value={opacity}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              setOpacity(val);
+              updateActiveText('opacity', val);
+            }}
+          />
+        </div>
+
         <button onClick={deleteSelected} className={styles.btnDelete}>
-          선택 삭제
+          삭제
         </button>
 
         <button onClick={handleDownload} className={styles.btnDownload}>
-          ⬇️ 이미지 저장
+          저장
         </button>
       </div>
 

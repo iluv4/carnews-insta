@@ -28,8 +28,14 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. Build prompts for a 3-slide carousel
-    const basePrompt = `Create a professional Instagram card news image based on this structural analysis: ${jsonlAnalysis}. Aesthetic Style: ${reference || 'modern'}. IMPORTANT: Leave empty space where text will be added.`;
+    // 2. Build premium prompts for a 3-slide carousel
+    const premiumKeywords = "professional photography, high-end magazine style, minimalist SaaS aesthetic, clean composition, studio lighting, 8k resolution, elegant, sophisticated";
+    const basePrompt = `Create a visually stunning, premium Instagram card news image. 
+    Aesthetic Style: ${reference || 'modern and sleek'}. 
+    Theme: ${theme}.
+    Structural Context: ${jsonlAnalysis}.
+    Keywords: ${premiumKeywords}.
+    IMPORTANT: Leave clear, empty spaces for text overlays. No text in the image itself.`;
     
     const prompts = [
       `${basePrompt} This is Slide 1 (Cover). Focus on a striking main visual for the theme: ${theme}`,
@@ -48,6 +54,7 @@ export async function POST(req: Request) {
             prompt,
             n: 1,
             size: "1024x1792",
+            quality: "hd",
           })
         )
       );
@@ -61,6 +68,7 @@ export async function POST(req: Request) {
             prompt,
             n: 1,
             size: "1024x1792",
+            quality: "hd",
           })
         )
       );

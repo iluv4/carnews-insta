@@ -55,6 +55,54 @@ export default function CardGenerator() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [newTemplateName, setNewTemplateName] = useState('');
 
+  // UX Enhancement States
+  const [progress, setProgress] = useState(0);
+  const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  
+  const loadingTips = [
+    "Tip: 인스타그램 카드뉴스는 첫 장의 훅(Hook) 문구가 가장 중요합니다.",
+    "Tip: 고대비 색상 조합은 가독성을 높여 이탈률을 줄여줍니다.",
+    "Tip: 카드뉴스 본문은 1~2줄의 짧은 문장이 가장 잘 읽힙니다.",
+    "Tip: 마지막 슬라이드에 명확한 CTA(Call to Action)를 넣어보세요.",
+    "Tip: AI가 학습한 스타일은 브랜드 아이덴티티 유지에 도움을 줍니다.",
+    "Tip: 적절한 여백(White Space)은 디자인의 완성도를 높입니다.",
+    "Tip: 폰트 크기는 모바일 환경을 고려하여 넉넉하게 설정하세요.",
+    "Tip: '저장하기'나 '공유하기'를 유도하는 멘트를 꼭 넣어보세요.",
+    "Tip: 일관된 톤앤매너는 계정의 전문성을 높여줍니다.",
+    "Tip: AI 생성 이미지는 저작권 걱정 없이 자유롭게 사용 가능합니다."
+  ];
+
+  // Progress simulation logic
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    let tipInterval: NodeJS.Timeout;
+
+    if (generating || analyzing || loading) {
+      setProgress(0);
+      setCurrentTipIndex(Math.floor(Math.random() * loadingTips.length));
+      
+      interval = setInterval(() => {
+        setProgress(prev => {
+          if (prev < 30) return prev + 2; // Fast start
+          if (prev < 70) return prev + 0.5; // Slow down
+          if (prev < 95) return prev + 0.1; // Crawl at end
+          return prev;
+        });
+      }, 100);
+
+      tipInterval = setInterval(() => {
+        setCurrentTipIndex(prev => (prev + 1) % loadingTips.length);
+      }, 4000);
+    } else {
+      setProgress(0);
+    }
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(tipInterval);
+    };
+  }, [generating, analyzing, loading]);
+
   // Generation Settings
   const [theme, setTheme] = useState('');
   const [generationMode, setGenerationMode] = useState<'creative' | 'strict'>('creative');
@@ -73,8 +121,8 @@ export default function CardGenerator() {
     }
   };
 
-  const handleFetchImages = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleFetchImages = async (e: React.FormEvent | string) => {
+    if (typeof e !== 'string') e.preventDefault();
     if (!instagramUrl) return;
 
     setLoading(true);
@@ -458,10 +506,20 @@ export default function CardGenerator() {
                 )}
                 
                 {analyzing && (
-                  <div className={styles.successMessage}>
-                    <div className={styles.loader} style={{ width: '40px', height: '40px', borderTopColor: 'var(--primary)' }}></div>
-                    <h3 style={{ marginTop: '24px' }}>AI가 스타일을 분석 중입니다...</h3>
-                    <p>컬러 팔레트와 레이아웃 구조를 학습하고 있습니다.</p>
+                  <div className={styles.loadingOverlay}>
+                    <div className={styles.progressContainer}>
+                      <div className={styles.progressBar} style={{ width: `${progress}%` }}></div>
+                    </div>
+                    <div className={styles.statusGroup}>
+                       <div className={styles.loader} style={{ width: '40px', height: '40px', borderTopColor: 'var(--primary)' }}></div>
+                       <h3 className={styles.statusTitle}>
+                         {progress < 40 ? '이미지 레이아웃 분석 중...' : progress < 80 ? '컬러 팔레트 추출 중...' : '디자인 에스테틱 최적화 중...'}
+                       </h3>
+                       <p className={styles.progressPercent}>{Math.round(progress)}%</p>
+                    </div>
+                    <div className={styles.tipBox}>
+                      <p className={styles.tipText}>{loadingTips[currentTipIndex]}</p>
+                    </div>
                   </div>
                 )}
                 
@@ -568,10 +626,20 @@ export default function CardGenerator() {
               <div className={styles.editorLayout}>
                 <div className={styles.canvasContainer}>
                   {generating ? (
-                    <div className={styles.loadingPlaceholder}>
-                      <div className={styles.skeleton} style={{ width: '500px', height: '500px', borderRadius: 'var(--radius-xl)', marginBottom: '32px' }}></div>
-                      <h3 className={styles.sectionTitle}>AI가 첫 번째 슬라이드를 생성 중입니다...</h3>
-                      <p className={styles.sectionDesc}>디자인 에스테틱에 맞춰 이미지를 렌더링하고 있습니다.</p>
+                    <div className={styles.loadingOverlay}>
+                      <div className={styles.progressContainer}>
+                        <div className={styles.progressBar} style={{ width: `${progress}%` }}></div>
+                      </div>
+                      <div className={styles.statusGroup}>
+                        <div className={styles.pulseIcon}>🎨</div>
+                        <h3 className={styles.statusTitle}>
+                          {progress < 30 ? '브랜드 스타일 입히는 중...' : progress < 60 ? 'AI 카드뉴스 배경 생성 중...' : progress < 90 ? '고해상도 픽셀 렌더링 중...' : '최종 결과물 완성하는 중...'}
+                        </h3>
+                        <p className={styles.progressPercent}>{Math.round(progress)}%</p>
+                      </div>
+                      <div className={styles.tipBox}>
+                        <p className={styles.tipText}>{loadingTips[currentTipIndex]}</p>
+                      </div>
                     </div>
                   ) : resultImages.length > 0 ? (
                     <CanvasEditor 
