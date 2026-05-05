@@ -1,28 +1,33 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import axios from 'axios';
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const url = searchParams.get('url');
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const imageUrl = searchParams.get('url');
 
-  if (!url) {
+  if (!imageUrl) {
     return NextResponse.json({ error: 'URL is required' }, { status: 400 });
   }
 
   try {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    
-    const headers = new Headers();
-    headers.set('Content-Type', response.headers.get('Content-Type') || 'image/png');
-    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-    headers.set('Access-Control-Allow-Origin', '*');
-
-    return new NextResponse(blob, {
-      status: 200,
-      headers,
+    const response = await axios.get(imageUrl, {
+      responseType: 'arraybuffer',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
+        'Referer': 'https://www.instagram.com/'
+      }
     });
-  } catch (error) {
-    console.error('Proxy error:', error);
+
+    const contentType = response.headers['content-type'];
+    return new NextResponse(response.data, {
+      headers: {
+        'Content-Type': contentType || 'image/jpeg',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=86400'
+      }
+    });
+  } catch (error: any) {
+    console.error('Proxy error:', error.message);
     return NextResponse.json({ error: 'Failed to fetch image' }, { status: 500 });
   }
 }

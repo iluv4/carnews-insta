@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as fabric from 'fabric';
 import styles from './CanvasEditor.module.css';
 
@@ -12,189 +12,94 @@ interface CanvasEditorProps {
 export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasInstance, setCanvasInstance] = useState<fabric.Canvas | null>(null);
-
-  // Settings state
-  const [activeColor, setActiveColor] = useState('#ffffff');
-  const [activeStrokeColor, setActiveStrokeColor] = useState('#000000');
-  const [strokeWidth, setStrokeWidth] = useState(0);
-  const [letterSpacing, setLetterSpacing] = useState(0);
-  const [lineHeight, setLineHeight] = useState(1.1);
-  const [opacity, setOpacity] = useState(1);
-  const [fontWeight, setFontWeight] = useState<'normal' | 'bold'>('bold');
-  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
-  const [fontFamily, setFontFamily] = useState('Pretendard, sans-serif');
   const [saving, setSaving] = useState(false);
-
-  const [history, setHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
 
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    // Initialize Fabric Canvas with responsive sizing
     const canvas = new fabric.Canvas(canvasRef.current, {
-      width: 800,
-      height: 800,
-      backgroundColor: '#f1f5f9',
-      preserveObjectStacking: true
+      width: 500,
+      height: 875,
+      backgroundColor: '#f8fafc',
     });
 
-    // Figma-style Controls Theme
-    fabric.InteractiveFabricObject.prototype.transparentCorners = false;
-    fabric.InteractiveFabricObject.prototype.cornerColor = '#6366f1';
-    fabric.InteractiveFabricObject.prototype.cornerStyle = 'circle';
-    fabric.InteractiveFabricObject.prototype.cornerSize = 10;
-    fabric.InteractiveFabricObject.prototype.borderColor = '#6366f1';
-    fabric.InteractiveFabricObject.prototype.borderScaleFactor = 1.5;
+    fabric.Image.fromURL(imageUrl, {
+      crossOrigin: 'anonymous'
+    }).then((img) => {
+      img.scaleToWidth(500);
+      canvas.backgroundImage = img;
+      
+      const title = new fabric.IText('여기에 제목 입력', {
+        left: 50,
+        top: 100,
+        fontSize: 40,
+        fontFamily: 'Pretendard',
+        fontWeight: '900',
+        fill: '#ffffff',
+      });
+      canvas.add(title);
+      canvas.renderAll();
+    });
 
     setCanvasInstance(canvas);
 
-    // Keyboard Shortcuts
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const activeObject = canvas.getActiveObject();
-      
-      // Delete
-      if ((e.key === 'Delete' || e.key === 'Backspace') && activeObject && !(activeObject as any).isEditing) {
-        canvas.remove(activeObject);
-        canvas.discardActiveObject();
-        canvas.requestRenderAll();
-        saveHistory();
-      }
-
-      // Copy/Paste (Simple implementation)
-      if (e.ctrlKey && e.key === 'c' && activeObject) {
-        activeObject.clone().then((cloned: any) => {
-          (window as any)._clipboard = cloned;
-        });
-      }
-
-      if (e.ctrlKey && e.key === 'v' && (window as any)._clipboard) {
-        (window as any)._clipboard.clone().then((clonedObj: any) => {
-          canvas.discardActiveObject();
-          clonedObj.set({ left: clonedObj.left + 20, top: clonedObj.top + 20, evented: true });
-          if (clonedObj.type === 'activeSelection') {
-            clonedObj.canvas = canvas;
-            clonedObj.forEachObject((obj: any) => canvas.add(obj));
-            clonedObj.setCoords();
-          } else {
-            canvas.add(clonedObj);
-          }
-          canvas.setActiveObject(clonedObj);
-          canvas.requestRenderAll();
-          saveHistory();
-        });
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
-    const imgElement = new Image();
-    imgElement.crossOrigin = "anonymous";
-    imgElement.src = `/api/proxy?url=${encodeURIComponent(imageUrl)}`;
-    imgElement.onload = () => {
-      canvas.setDimensions({ width: imgElement.width, height: imgElement.height });
-      const fabricImg = new fabric.FabricImage(imgElement, { originX: 'left', originY: 'top', selectable: false, evented: false });
-      canvas.backgroundImage = fabricImg;
-      canvas.requestRenderAll();
-      saveHistory();
-    };
-
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
       canvas.dispose();
-      setCanvasInstance(null);
     };
   }, [imageUrl]);
 
-  const saveHistory = () => {
-    if (!canvasInstance) return;
-    const json = JSON.stringify(canvasInstance.toJSON());
-    setHistory(prev => [...prev.slice(0, historyIndex + 1), json]);
-    setHistoryIndex(prev => prev + 1);
-  };
-
-  const updateTextOptions = (newOptions: Partial<typeof textOptions>) => {
-    const updated = { ...textOptions, ...newOptions };
-    setTextOptions(updated);
-    if (canvasInstance) {
-      const activeObject = canvasInstance.getActiveObject() as fabric.Textbox;
-      if (activeObject && activeObject.type === 'textbox') {
-        activeObject.set(newOptions as any);
-        canvasInstance.requestRenderAll();
-      }
-    }
-  };
-
   const addText = () => {
     if (!canvasInstance) return;
-    const text = new fabric.Textbox('새로운 텍스트', {
-      left: canvasInstance.width! / 2,
-      top: canvasInstance.height! / 2,
-      originX: 'center',
-      originY: 'center',
-      width: canvasInstance.width! * 0.8,
-      ...textOptions
+    const text = new fabric.IText('새로운 텍스트', {
+      left: 100,
+      top: 100,
+      fontSize: 30,
+      fill: '#333',
     });
     canvasInstance.add(text);
     canvasInstance.setActiveObject(text);
-    canvasInstance.requestRenderAll();
-    saveHistory();
   };
 
   const deleteSelected = () => {
     if (!canvasInstance) return;
-    const activeObject = canvasInstance.getActiveObject();
-    if (activeObject) {
-      canvasInstance.remove(activeObject);
-      canvasInstance.discardActiveObject();
-      canvasInstance.requestRenderAll();
-    }
+    const activeObjects = canvasInstance.getActiveObjects();
+    canvasInstance.remove(...activeObjects);
+    canvasInstance.discardActiveObject();
   };
 
-  const downloadImage = () => {
+  const handleDownload = () => {
     if (!canvasInstance) return;
     canvasInstance.discardActiveObject();
     canvasInstance.requestRenderAll();
     setTimeout(() => {
-      const dataURL = canvasInstance.toDataURL({ format: 'png', quality: 1, multiplier: 1 });
+      const dataURL = canvasInstance.toDataURL({ format: 'png', quality: 1 });
       const link = document.createElement('a');
       link.href = dataURL;
-      link.download = `design_${Date.now()}.png`;
+      link.download = `cardnews_${Date.now()}.png`;
       link.click();
       onDownloadComplete?.();
     }, 100);
   };
 
-  const saveToProject = async () => {
-    if (!canvasInstance) return;
-    setSaving(true);
-    try {
-      const res = await fetch('/api/cards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl, jsonlData: JSON.stringify(canvasInstance.toJSON()) })
-      });
-      if (res.ok) alert('저장 성공!');
-    } catch (err) { alert('저장 실패'); }
-    finally { setSaving(false); }
-  };
-
   return (
     <div className={styles.editorContainer}>
       <div className={styles.toolbar}>
+        <div className={styles.toolGroup}>
+          <button onClick={addText} className={styles.toolBtn}>
+            <span className={styles.toolIcon}>T</span>
+            <span>텍스트 추가</span>
+          </button>
+          <button onClick={deleteSelected} className={styles.toolBtn}>
+            <span className={styles.toolIcon}>🗑️</span>
+            <span>삭제</span>
+          </button>
         </div>
 
-        <button onClick={deleteSelected} className={styles.btnDelete}>
-          삭제
-        </button>
-
-        <button onClick={handleSaveToProject} className={styles.btnSave} disabled={saving}>
-          {saving ? '저장 중...' : '📁 보관함 저장'}
-        </button>
-
-        <button onClick={handleDownload} className={styles.btnDownload}>
-          저장
-        </button>
+        <div className={styles.actionGroup}>
+          <button onClick={handleDownload} className={styles.downloadBtn}>
+            ✨ 고화질 저장하기
+          </button>
+        </div>
       </div>
 
       <div className={styles.canvasWrapper}>
@@ -204,7 +109,7 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
       </div>
 
       <p className={styles.hint}>
-        💡 텍스트를 더블클릭하여 내용을 수정하고, 드래그하여 위치와 크기를 조절하세요.
+        💡 텍스트를 더블클릭하여 수정하고, 드래그하여 위치를 조절하세요.
       </p>
     </div>
   );

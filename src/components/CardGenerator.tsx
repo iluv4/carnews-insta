@@ -85,7 +85,6 @@ export default function CardGenerator() {
 
     setLoading(true);
     setStatusText('인스타그램 미디어 추출 중...');
-    setExtractedImages([]);
     
     try {
       const res = await fetch('/api/instagram', {
@@ -113,14 +112,37 @@ export default function CardGenerator() {
     if (!imgToAnalyze) return;
 
     setAnalyzing(true);
-    setStatusText('AI가 디자인 DNA 분석 중...');
+    setStatusText('이미지 최적화 중...');
     
     try {
-      // Image compression logic omitted for brevity in write_to_file, but assumed implemented
+      // 1. Fetch image via proxy and compress it to Base64
+      const compressedImage = await new Promise<string>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = `/api/proxy?url=${encodeURIComponent(imgToAnalyze)}`;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 800; 
+          let width = img.width;
+          let height = img.height;
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = () => reject(new Error('이미지를 불러오는데 실패했습니다.'));
+      });
+
+      setStatusText('AI가 디자인 DNA 분석 중...');
       const analyzeRes = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: imgToAnalyze })
+        body: JSON.stringify({ imageUrl: compressedImage })
       });
       const data = await analyzeRes.json();
       if (!analyzeRes.ok) throw new Error(data.error);
@@ -129,6 +151,7 @@ export default function CardGenerator() {
       setStatusText('스타일 학습 완료!');
       return data.analysis;
     } catch (error: any) {
+      console.error(error);
       setStatusText(`Error: ${error.message}`);
     } finally {
       setAnalyzing(false);
@@ -137,12 +160,29 @@ export default function CardGenerator() {
 
   const handleOneClickAnalyze = async (url: string) => {
     setInstagramUrl(url);
-    setCurrentStep(2); // INSTANT JUMP for "Wow" effect
-    setStatusText('AI가 스타일을 실시간 학습 중입니다. 내용을 입력하는 동안 완료됩니다!');
+    setJsonlData(''); // Clear old data
+    setCurrentStep(2); 
+    setAnalyzing(true);
+    setStatusText('AI가 스타일을 실시간 학습 중입니다. 잠시만 기다려주세요...');
     
-    const images = await handleFetchImages(url);
-    if (images && images.length > 0) {
-      await handleAnalyze(images[0]);
+    try {
+      const images = await handleFetchImages(url);
+      if (images && images.length > 0) {
+        setSelectedImageIndex(0);
+        const analysis = await handleAnalyze(images[0]);
+        if (analysis) {
+          setStatusText('맞춤형 스타일 학습 완료! 내용을 입력하세요.');
+        } else {
+          throw new Error('디자인 분석에 실패했습니다.');
+        }
+      } else {
+        throw new Error('인스타그램 미디어를 가져오지 못했습니다.');
+      }
+    } catch (err: any) {
+      setStatusText(`오류: ${err.message}`);
+      setCurrentStep(0); // Error? Go back to retry
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -194,7 +234,7 @@ export default function CardGenerator() {
         {activeTab.startsWith('portal-') ? (
           <PortalDashboard 
             portalId={activeTab} 
-            onStart={(url) => handleOneClickAnalyze(url).then(() => setCurrentStep(2))} 
+            onStart={(url) => handleOneClickAnalyze(url)} 
           />
         ) : (
           <>
@@ -209,7 +249,7 @@ export default function CardGenerator() {
                     placeholder="인스타그램 포스트 URL 입력"
                     className={styles.urlInput}
                   />
-                  <button className="btn-primary" onClick={() => handleFetchImages()}>이미지 분석</button>
+                  <button className="btn-primary" onClick={() => handleFetchImages()}>이미지 추출</button>
                 </div>
                 
                 <div className={styles.quickTests}>
@@ -235,10 +275,8 @@ export default function CardGenerator() {
                       </div>
                     ))}
                     <div className={styles.actionGroup}>
-                      <button className="btn-secondary" onClick={() => setCurrentStep(0)}>초기화</button>
-                      <button className="btn-primary" style={{ flex: 1 }} onClick={() => handleAnalyze().then(() => setCurrentStep(2))}>
-                        이 스타일로 분석하기
-                      </button>
+                       <button className="btn-secondary" onClick={() => { setExtractedImages([]); setInstagramUrl(''); }}>초기화</button>
+                       <button className="btn-primary" onClick={() => handleAnalyze().then(() => setCurrentStep(2))}>이 스타일로 분석하기</button>
                     </div>
                   </div>
                 )}
@@ -250,8 +288,14 @@ export default function CardGenerator() {
                 <h2 className={styles.sectionTitle}>카드뉴스 내용 입력</h2>
                 <div className={styles.formGroup}>
                   <label className="label">적용된 스타일</label>
-                  <div className={styles.styleBadge}>
-                    {jsonlData ? '✨ 커스텀 디자인 DNA (학습됨)' : '선택된 스타일 없음'}
+                  <div className={`${styles.styleBadge} ${analyzing ? styles.pulse : ''}`}>
+                    {analyzing ? (
+                      <span className={styles.analyzingText}>🧬 AI가 디자인 DNA 분석 중...</span>
+                    ) : jsonlData ? (
+                      '✨ 커스텀 디자인 DNA (학습됨)'
+                    ) : (
+                      '⚠️ 선택된 스타일 없음 (분석 대기 중...)'
+                    )}
                   </div>
                 </div>
                 <textarea 
@@ -262,7 +306,7 @@ export default function CardGenerator() {
                 />
                 <div className={styles.actionGroup}>
                   <button className="btn-secondary" onClick={() => setCurrentStep(0)}>← 스타일 재선택</button>
-                  <button className="btn-primary" style={{ flex: 1 }} onClick={handleGenerate} disabled={generating}>
+                  <button className="btn-primary" onClick={handleGenerate} disabled={generating || !jsonlData}>
                     {generating ? '생성 중...' : 'AI 카드뉴스 생성'}
                   </button>
                 </div>
@@ -272,7 +316,8 @@ export default function CardGenerator() {
             {currentStep === 3 && (
               <div className={styles.editorView}>
                 <div className={styles.editorHeader}>
-                   <button className="btn-secondary" onClick={() => setCurrentStep(2)}>← 내용 수정하기</button>
+                  <button className="btn-secondary" onClick={() => setCurrentStep(2)}>← 내용 수정하기</button>
+                  <h2 className={styles.sectionTitle}>최종 편집 및 저장</h2>
                 </div>
                 <CanvasEditor imageUrl={resultImages[currentSlide]} />
                 <div className={styles.pagination}>
