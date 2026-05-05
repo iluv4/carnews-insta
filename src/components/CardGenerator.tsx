@@ -214,7 +214,10 @@ export default function CardGenerator() {
     if (!jsonlData && !selectedTemplateId) return;
     setGenerating(true);
     setProgress(0);
-    
+    // Go to step 3 immediately with empty slots
+    setResultImages(['', '', '']);
+    setCurrentStep(3);
+
     try {
       const res = await fetch('/api/transform', {
         method: 'POST',
@@ -222,17 +225,43 @@ export default function CardGenerator() {
         body: JSON.stringify({
           jsonlAnalysis: jsonlData || templates.find(t => t.id === selectedTemplateId)?.content,
           theme,
-          reference: generationMode,
           referenceImageBase64,
-        })
+        }),
       });
-      const data = await res.json();
-      if (data.transformedUrls) {
-        setResultImages(data.transformedUrls);
-        setCurrentStep(3);
+
+      if (!res.body) throw new Error('No response body');
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const { index, url, error } = JSON.parse(line.slice(6));
+            if (url) {
+              setResultImages(prev => {
+                const next = [...prev];
+                next[index] = url;
+                return next;
+              });
+              setProgress(Math.round(((index + 1) / 3) * 100));
+              setStatusText(`슬라이드 ${index + 1}/3 완료`);
+            }
+            if (error) console.error(`Slide ${index} error:`, error);
+          } catch {}
+        }
       }
     } catch (err) { console.error(err); }
-    finally { setGenerating(false); }
+    finally {
+      setGenerating(false);
+      setStatusText('');
+    }
   };
 
   const steps = [
@@ -377,19 +406,45 @@ export default function CardGenerator() {
             {currentStep === 3 && (
               <div className={styles.editorView}>
                 <div className={styles.editorHeader}>
-                  <button className="btn-secondary" onClick={() => setCurrentStep(2)}>← 다시 생성</button>
-                  <h2 className={styles.sectionTitle}>생성 완료</h2>
+                  <button className="btn-secondary" onClick={() => { setCurrentStep(2); setGenerating(false); }}>← 다시 생성</button>
+                  <h2 className={styles.sectionTitle}>
+                    {generating ? `생성 중... (${progress}%)` : '생성 완료 🎉'}
+                  </h2>
                 </div>
+                {generating && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ background: '#f1f5f9', borderRadius: 99, height: 6, overflow: 'hidden' }}>
+                      <div style={{ background: 'linear-gradient(90deg, #6366f1, #8b5cf6)', height: '100%', width: `${progress}%`, transition: 'width 0.5s ease', borderRadius: 99 }} />
+                    </div>
+                    <p style={{ textAlign: 'center', fontSize: '0.8rem', color: '#64748b', marginTop: 8 }}>
+                      {statusText || '슬라이드를 순서대로 생성하고 있어요. 완료된 카드부터 바로 확인할 수 있습니다.'}
+                    </p>
+                  </div>
+                )}
                 <div className={styles.imageGrid}>
                   {resultImages.map((img, i) => (
                     <div key={i} className={styles.imageItem} style={{ position: 'relative' }}>
-                      <img
-                        src={img}
-                        alt={`슬라이드 ${i + 1}`}
-                        style={{ width: '100%', borderRadius: 12, cursor: 'zoom-in' }}
-                        onClick={() => setLightboxImg(img)}
-                      />
-                      <button
+                      {img ? (
+                        <img
+                          src={img}
+                          alt={`슬라이드 ${i + 1}`}
+                          style={{ width: '100%', borderRadius: 12, cursor: 'zoom-in' }}
+                          onClick={() => setLightboxImg(img)}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '100%', aspectRatio: '2/3', borderRadius: 12,
+                          background: 'linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)',
+                          backgroundSize: '200% 100%',
+                          animation: 'shimmer 1.5s infinite',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexDirection: 'column', gap: 8, color: '#94a3b8',
+                        }}>
+                          <div style={{ fontSize: 32 }}>✨</div>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>슬라이드 {i + 1} 생성 중...</div>
+                        </div>
+                      )}
+                      {img && <button
                         className={styles.modernBtn}
                         style={{ display: 'block', width: '100%', marginTop: 8 }}
                         onClick={() => {
@@ -408,7 +463,7 @@ export default function CardGenerator() {
                         }}
                       >
                         슬라이드 {i + 1} 저장
-                      </button>
+                      </button>}
                     </div>
                   ))}
                 </div>
