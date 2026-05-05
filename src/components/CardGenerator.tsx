@@ -46,15 +46,9 @@ export default function CardGenerator() {
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [examplePreviews, setExamplePreviews] = useState<Record<string, string>>({});
 
+
   const industryExamples = [
-    { name: '부암동 맛집', url: 'https://www.instagram.com/p/DX6yodgiceN/' },
-    { name: '병원/의료', url: 'https://www.instagram.com/p/DXVWOHIDyEy/' },
-    { name: '보험/금융', url: 'https://www.instagram.com/p/DXtZaX8EduP/' },
-    { name: '화장품/뷰티', url: 'https://www.instagram.com/p/DVFHGrakybK/' },
-    { name: '식당(성수)', url: 'https://www.instagram.com/p/DWqmSYbiT-X/' },
-    { name: '커피/카페', url: 'https://www.instagram.com/p/DXTdPJvks-J/' },
-    { name: '무신사(커머스)', url: 'https://www.instagram.com/p/B_j5fU-gjbz/' },
-    { name: '테크(마우스)', url: 'https://www.instagram.com/p/DXQpKowoCsj/' },
+    { name: '식품', url: 'https://www.instagram.com/p/DWiwH4cAbZP/' },
   ];
 
   const loadingTips = [
