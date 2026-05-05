@@ -7,7 +7,7 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { jsonlAnalysis, theme } = await req.json();
+    const { jsonlAnalysis, theme, referenceImageBase64 } = await req.json();
 
     if (!jsonlAnalysis) {
       return NextResponse.json({ error: 'JSONL Analysis data is required' }, { status: 400 });
@@ -47,70 +47,86 @@ export async function POST(req: Request) {
 
     const copy = JSON.parse(copyRes.choices[0].message.content || '{}');
 
-    // Step 2: gpt-image-2 generates complete card news with text baked in
     const slides = [
       {
         role: 'COVER',
         text: `제목: "${copy.cover?.title}"\n부제: "${copy.cover?.subtitle}"`,
-        layout: `Layout: Bold title text at top center, subtitle below it, strong hero visual filling the bottom half.`,
+        layout: 'Bold title at top center, subtitle below, strong hero visual at bottom half.',
       },
       {
         role: 'CONTENT',
-        text: `제목: "${copy.content?.title}"\n포인트:\n${(copy.content?.points || []).map((p: string) => `• ${p}`).join('\n')}`,
-        layout: `Layout: Title at top, three bullet points with icons in the middle, clean footer at bottom.`,
+        text: `제목: "${copy.content?.title}"\n${(copy.content?.points || []).map((p: string) => `• ${p}`).join('\n')}`,
+        layout: 'Title at top, three bullet points with icons in the middle, clean footer.',
       },
       {
         role: 'CLOSING CTA',
         text: `헤드라인: "${copy.closing?.headline}"\nCTA: "${copy.closing?.cta}"`,
-        layout: `Layout: Large headline text centered, strong graphic below, CTA button at the bottom.`,
+        layout: 'Large headline centered, bold graphic below, CTA button at bottom.',
       },
     ];
 
-    const responses = await Promise.all(
-      slides.map(({ role, text, layout }) => {
-        const prompt = `You are a world-class Korean card news (카드뉴스) designer and typographer.
+    // Step 2: Generate with reference image (images.edit) or text-only (images.generate)
+    async function generateSlide(slide: typeof slides[0]): Promise<string> {
+      const prompt = `You are a world-class Korean card news (카드뉴스) designer.
 
-Generate a COMPLETE, PRINT-READY "${role}" slide card news image for Instagram.
+TASK: Create a BRAND NEW "${slide.role}" slide about: "${theme}"
 
-TOPIC: ${theme}
+⚠️ CRITICAL STYLE INSTRUCTION:
+The reference image is provided ONLY as a visual style guide.
+COMPLETELY DISCARD all content from the reference (people, faces, objects, text, backgrounds).
+Extract and replicate ONLY: color palette, gradient style, texture, typography mood, layout rhythm, and overall aesthetic.
+The output must be a 100% new original image — NOT a variation or edit of the reference.
 
-KOREAN TEXT TO RENDER IN THE IMAGE (render these exactly as written in Korean):
-${text}
+KOREAN TEXT TO RENDER (exact characters, bold and legible):
+${slide.text}
 
-DESIGN DNA (match this style precisely):
+LAYOUT: ${slide.layout}
+
+DESIGN DNA (from style analysis):
 ${dna}
 
-${layout}
+RULES:
+- Portrait 2:3 format. Ultra-high quality.
+- Render Korean text exactly as provided — sharp, modern sans-serif, highly legible
+- No human faces or bodies
+- Replicate the color palette and visual mood from the reference precisely`;
 
-TYPOGRAPHY RULES:
-- Render all Korean text exactly as provided — clean, bold, highly legible
-- Use a modern sans-serif style for Korean characters
-- Text must be sharp and perfectly readable
-- Title text: large and dominant
-- Body/subtitle: medium weight, comfortable reading size
+      if (referenceImageBase64) {
+        const base64Data = referenceImageBase64.replace(/^data:image\/\w+;base64,/, '');
+        const mimeMatch = referenceImageBase64.match(/^data:(image\/\w+);base64,/);
+        const mimeType = (mimeMatch?.[1] || 'image/png') as 'image/png' | 'image/jpeg' | 'image/webp';
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        const imageFile = new File([imageBuffer], 'reference.png', { type: mimeType });
 
-DESIGN RULES:
-- Portrait format (2:3). Ultra-high visual quality.
-- Colors, textures, mood must precisely match the Design DNA
-- Professional Instagram card news aesthetic
-- No additional random text or English except what is specified above`;
-
-        return openai.images.generate({
+        const res = await (openai.images as any).edit({
           model: 'gpt-image-2',
+          image: imageFile,
           prompt,
           n: 1,
           size: '1024x1536',
           quality: 'high',
-        } as any);
-      })
-    );
+        });
+        const item = res.data?.[0] as any;
+        if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
+        if (item?.url) return item.url;
+        throw new Error('Empty response from images.edit');
+      }
 
-    const transformedUrls = responses.map((res) => {
+      // Fallback: no reference image
+      const res = await openai.images.generate({
+        model: 'gpt-image-2',
+        prompt,
+        n: 1,
+        size: '1024x1536',
+        quality: 'high',
+      } as any);
       const item = res.data?.[0] as any;
       if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
       if (item?.url) return item.url;
-      throw new Error('gpt-image-2 응답이 비어 있습니다.');
-    });
+      throw new Error('Empty response from images.generate');
+    }
+
+    const transformedUrls = await Promise.all(slides.map(generateSlide));
 
     return NextResponse.json({ transformedUrls, copy });
 
