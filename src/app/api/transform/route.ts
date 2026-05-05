@@ -54,41 +54,25 @@ export async function POST(req: Request) {
       `${basePrompt} Focus: Action Slide (Conclusion). Minimalist and strong visual anchor for: ${theme}`
     ];
 
-    // 3. Generate images — try gpt-image-2, fall back to dall-e-3
-    async function generateOne(prompt: string): Promise<string> {
-      // Try gpt-image-2 first
-      try {
-        const res = await openai.images.generate({
+    // 3. Generate images with gpt-image-2
+    const responses = await Promise.all(
+      prompts.map(prompt =>
+        openai.images.generate({
           model: "gpt-image-2",
-          prompt,
+          prompt: prompt.substring(0, 32000),
           n: 1,
           size: "1024x1536",
           quality: "high",
-        } as any);
-        const item = res.data?.[0] as any;
-        if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
-        if (item?.url) return item.url;
-        throw new Error('Empty response from gpt-image-2');
-      } catch (e: any) {
-        console.warn('gpt-image-2 failed, falling back to dall-e-3:', e?.error?.message || e?.message);
-      }
+        } as any)
+      )
+    );
 
-      // Fallback: dall-e-3 (universally available)
-      const res = await openai.images.generate({
-        model: "dall-e-3",
-        prompt: prompt.substring(0, 4000),
-        n: 1,
-        size: "1024x1792",
-        quality: "hd",
-        response_format: "b64_json",
-      });
+    const transformedUrls = responses.map(res => {
       const item = res.data?.[0] as any;
       if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
       if (item?.url) return item.url;
-      throw new Error('Empty response from dall-e-3');
-    }
-
-    const transformedUrls = await Promise.all(prompts.map(generateOne));
+      throw new Error('gpt-image-2 응답이 비어 있습니다.');
+    });
 
     return NextResponse.json({ transformedUrls });
 
