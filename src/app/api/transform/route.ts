@@ -30,10 +30,31 @@ export async function POST(req: Request) {
 
     const trimmedAnalysis = jsonlAnalysis.substring(0, 2000);
 
+    const templateBase = `
+TEMPLATE REMAKE INSTRUCTIONS:
+Treat the reference image as a fixed template. Your job is to swap out only 3 things while keeping everything else pixel-perfect identical:
+① FOOD/PRODUCT PHOTO → replace with high-quality photo of: "${theme}"
+② BACKGROUND → replace with a background that fits "${theme}" (same style/mood as original)
+③ TEXT CONTENT → replace with Korean copy appropriate for "${theme}"
+
+KEEP EXACTLY (do not change):
+- Overall card layout and grid structure
+- Text box positions, sizes, and alignment
+- Typography weight, size hierarchy, and font style
+- Color scheme and palette (unless background swap requires adjustment)
+- Overlay layers, gradients, borders, shadows
+- Decorative graphic elements and icons
+- Logo/badge placement areas
+- Spacing and padding rhythm
+
+Design DNA for reference:
+${trimmedAnalysis}
+`;
+
     const slidePrompts = [
-      `This is a cover slide. Apply theme: "${theme}". Use the same visual style, color palette, layout structure as the reference. Leave clean space for large title text. No text in the image.`,
-      `This is a content slide. Apply theme: "${theme}". Balanced layout with the same brand aesthetic as the reference. Leave space for body text. No text in the image.`,
-      `This is a closing slide. Apply theme: "${theme}". Minimalist, strong visual anchor matching the reference style. Leave space for CTA text. No text in the image.`,
+      `${templateBase}\nSLIDE TYPE: COVER (slide 1 of 3). Strong hero image of "${theme}", bold title text at top or bottom.`,
+      `${templateBase}\nSLIDE TYPE: CONTENT (slide 2 of 3). Feature/detail shot of "${theme}", body text with key points visible.`,
+      `${templateBase}\nSLIDE TYPE: CLOSING CTA (slide 3 of 3). Atmospheric shot of "${theme}", closing headline and call-to-action button area.`,
     ];
 
     async function generateSlide(slidePrompt: string): Promise<string> {

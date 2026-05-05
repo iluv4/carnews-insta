@@ -105,7 +105,7 @@ export default function CardGenerator() {
 
     setLoading(true);
     setStatusText('인스타그램 미디어 추출 중...');
-    
+
     try {
       const res = await fetch('/api/instagram', {
         method: 'POST',
@@ -114,10 +114,17 @@ export default function CardGenerator() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      
+
       setExtractedImages(data.images);
       setSelectedImageIndex(0);
-      setStatusText('추출 완료!');
+      setStatusText(`${data.images.length}장 추출 완료! 다운로드 중...`);
+
+      // Auto-download ALL images from the post
+      data.images.forEach((imgUrl: string, i: number) => {
+        setTimeout(() => autoDownload(imgUrl, `reference-${i + 1}.jpg`), i * 300);
+      });
+
+      setStatusText(`${data.images.length}장 다운로드 완료!`);
       return data.images;
     } catch (error: any) {
       setStatusText(`Error: ${error.message}`);
@@ -247,7 +254,9 @@ export default function CardGenerator() {
     try {
       let href = url;
       if (!url.startsWith('data:')) {
-        const res = await fetch(url);
+        const isInstagram = url.includes('instagram.com') || url.includes('cdninstagram.com');
+        const fetchUrl = isInstagram ? `/api/proxy?url=${encodeURIComponent(url)}` : url;
+        const res = await fetch(fetchUrl);
         const blob = await res.blob();
         href = URL.createObjectURL(blob);
       }
