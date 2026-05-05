@@ -1,6 +1,7 @@
 'use client';
 
 import { signIn, signOut, useSession } from 'next-auth/react';
+import Link from 'next/link';
 import { useTab } from '@/context/TabContext';
 import styles from './Navbar.module.css';
 
