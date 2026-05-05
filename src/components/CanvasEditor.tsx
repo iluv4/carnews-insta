@@ -39,12 +39,12 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
     });
 
     // Figma-style Controls Theme
-    fabric.InteractiveObject.prototype.transparentCorners = false;
-    fabric.InteractiveObject.prototype.cornerColor = '#6366f1';
-    fabric.InteractiveObject.prototype.cornerStyle = 'circle';
-    fabric.InteractiveObject.prototype.cornerSize = 10;
-    fabric.InteractiveObject.prototype.borderColor = '#6366f1';
-    fabric.InteractiveObject.prototype.borderScaleFactor = 1.5;
+    fabric.InteractiveFabricObject.prototype.transparentCorners = false;
+    fabric.InteractiveFabricObject.prototype.cornerColor = '#6366f1';
+    fabric.InteractiveFabricObject.prototype.cornerStyle = 'circle';
+    fabric.InteractiveFabricObject.prototype.cornerSize = 10;
+    fabric.InteractiveFabricObject.prototype.borderColor = '#6366f1';
+    fabric.InteractiveFabricObject.prototype.borderScaleFactor = 1.5;
 
     setCanvasInstance(canvas);
 

@@ -42,6 +42,6 @@ export const aiService = {
       size: "1024x1792",
     });
 
-    return response.data[0].url;
+    return response.data?.[0]?.url || '';
   }
 };
