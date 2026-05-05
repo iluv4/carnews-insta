@@ -273,6 +273,30 @@ export default function CardGenerator() {
     }
   };
 
+  const handleDownloadOnly = async (url: string) => {
+    setLoading(true);
+    setStatusText('이미지 가져오는 중...');
+    try {
+      const res = await fetch('/api/instagram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const images: string[] = data.images || [];
+      setStatusText(`${images.length}장 다운로드 중...`);
+      images.forEach((imgUrl, i) => {
+        setTimeout(() => autoDownload(imgUrl, `sosohan-${i + 1}.jpg`), i * 300);
+      });
+      setStatusText(`✅ ${images.length}장 다운로드 완료!`);
+    } catch (e: any) {
+      setStatusText(`오류: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!jsonlData && !selectedTemplateId) return;
     setGenerating(true);
@@ -359,26 +383,27 @@ export default function CardGenerator() {
                     {industryExamples.map(ex => {
                       const preview = examplePreviews[ex.url];
                       return (
-                        <button key={ex.name} className={styles.modernChip} onClick={() => handleOneClickAnalyze(ex.url)}>
-                          {preview ? (
-                            <img
-                              src={`/api/proxy?url=${encodeURIComponent(preview)}`}
-                              alt={ex.name}
-                              className={styles.chipThumb}
-                            />
-                          ) : (
-                            <span className={styles.chipIcon}>
-                              {ex.name.includes('부암동') ? '🍲' :
-                               ex.name.includes('병원') ? '🏥' :
-                               ex.name.includes('보험') ? '🛡️' :
-                               ex.name.includes('화장품') ? '💄' :
-                               ex.name.includes('식당') ? '🍕' :
-                               ex.name.includes('커피') ? '☕' :
-                               ex.name.includes('무신사') ? '👕' : '🖱️'}
-                            </span>
-                          )}
-                          <span className={styles.chipLabel}>{ex.name}</span>
-                        </button>
+                        <div key={ex.name} className={styles.chipWrapper}>
+                          <button className={styles.modernChip} onClick={() => handleOneClickAnalyze(ex.url)}>
+                            {preview ? (
+                              <img
+                                src={`/api/proxy?url=${encodeURIComponent(preview)}`}
+                                alt={ex.name}
+                                className={styles.chipThumb}
+                              />
+                            ) : (
+                              <span className={styles.chipIcon}>📷</span>
+                            )}
+                            <span className={styles.chipLabel}>{ex.name}</span>
+                          </button>
+                          <button
+                            className={styles.chipDownloadBtn}
+                            onClick={() => handleDownloadOnly(ex.url)}
+                            title="이미지만 다운로드"
+                          >
+                            ↓ 다운로드
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
