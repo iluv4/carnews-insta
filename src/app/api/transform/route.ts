@@ -54,24 +54,32 @@ export async function POST(req: Request) {
       `${basePrompt} Focus: Action Slide (Conclusion). Minimalist and strong visual anchor for: ${theme}`
     ];
 
-    // 3. Generate high-quality images with gpt-image-2 (User Enforced)
+    // 3. Generate high-quality images with gpt-image-2
     const responses = await Promise.all(
       prompts.map(prompt =>
         openai.images.generate({
-          model: "gpt-image-2", 
+          model: "gpt-image-2",
           prompt,
           n: 1,
-          size: "1024x1792",
-          quality: "hd",
-          style: "vivid",
-        })
+          size: "1024x1536",
+          quality: "high",
+          response_format: "b64_json",
+        } as any)
       )
     );
 
-    const transformedUrls = responses.map(res => res.data?.[0]?.url).filter(Boolean);
+    const transformedUrls = responses
+      .map(res => {
+        const item = res.data?.[0];
+        if (!item) return null;
+        if ((item as any).b64_json) return `data:image/png;base64,${(item as any).b64_json}`;
+        if (item.url) return item.url;
+        return null;
+      })
+      .filter(Boolean) as string[];
 
     if (transformedUrls.length === 0) {
-      throw new Error('No image URLs returned from OpenAI');
+      throw new Error('No images returned from OpenAI');
     }
 
     return NextResponse.json({ transformedUrls });
