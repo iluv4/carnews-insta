@@ -50,6 +50,8 @@ export default function CardGenerator() {
   const [progress, setProgress] = useState(0);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [examplePreviews, setExamplePreviews] = useState<Record<string, string>>({});
+  const [shareJobId, setShareJobId] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const industryExamples = [
     { name: '부암동 맛집', url: 'https://www.instagram.com/p/DX6yodgiceN/' },
@@ -251,7 +253,11 @@ export default function CardGenerator() {
     if (!jsonlData && !selectedTemplateId) return;
     setGenerating(true);
     setProgress(0);
-    
+
+    const jobId = crypto.randomUUID();
+    setShareJobId(jobId);
+    setShareCopied(false);
+
     try {
       const res = await fetch('/api/transform', {
         method: 'POST',
@@ -261,6 +267,7 @@ export default function CardGenerator() {
           theme,
           reference: generationMode,
           referenceImageBase64,
+          jobId,
         })
       });
       const data = await res.json();
@@ -270,6 +277,13 @@ export default function CardGenerator() {
       }
     } catch (err) { console.error(err); }
     finally { setGenerating(false); }
+  };
+
+  const copyShareLink = () => {
+    if (!shareJobId) return;
+    navigator.clipboard.writeText(`${window.location.origin}/share/${shareJobId}`);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
   };
 
   const steps = [
@@ -419,6 +433,23 @@ export default function CardGenerator() {
                     {generating ? '생성 중...' : 'AI 카드뉴스 생성'}
                   </button>
                 </div>
+
+                {generating && shareJobId && (
+                  <div className={styles.shareBanner}>
+                    <div className={styles.shareBannerText}>
+                      <span className={styles.shareDot} />
+                      <span>생성 중인 화면을 실시간으로 공유할 수 있어요</span>
+                    </div>
+                    <div className={styles.shareUrlRow}>
+                      <code className={styles.shareUrlCode}>
+                        {`${typeof window !== 'undefined' ? window.location.origin : ''}/share/${shareJobId}`}
+                      </code>
+                      <button className={styles.shareCopyBtn} onClick={copyShareLink}>
+                        {shareCopied ? '✅ 복사됨' : '🔗 복사'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
