@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { getCachedAnalysis, setCachedAnalysis } from '@/lib/analysisCache';
 
 export const maxDuration = 60;
 
@@ -12,9 +13,19 @@ export async function POST(req: Request) {
     const body = await req.json();
     // Accept imageUrls (array) or legacy imageUrl (single)
     const imageUrls: string[] = body.imageUrls || (body.imageUrl ? [body.imageUrl] : []);
+    const cacheKey: string | undefined = body.cacheKey;
 
     if (imageUrls.length === 0) {
       return NextResponse.json({ error: 'Image URL is required' }, { status: 400 });
+    }
+
+    // Return cached result if available (saves API cost on repeated analysis)
+    if (cacheKey) {
+      const cached = getCachedAnalysis(cacheKey);
+      if (cached) {
+        console.log('[analyze] cache hit for', cacheKey);
+        return NextResponse.json({ analysis: cached, cached: true });
+      }
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -78,6 +89,11 @@ Example lines:
     });
 
     const analysis = visionResponse.choices[0].message.content;
+
+    if (cacheKey && analysis) {
+      setCachedAnalysis(cacheKey, analysis);
+      console.log('[analyze] cached result for', cacheKey);
+    }
 
     return NextResponse.json({ analysis });
 
