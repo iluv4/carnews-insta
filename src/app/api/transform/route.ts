@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { createJob, updateJobSlide } from '@/lib/jobStore';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'dummy_key',
@@ -7,7 +8,8 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { jsonlAnalysis, theme, reference, referenceImageBase64 } = await req.json();
+    const { jsonlAnalysis, theme, reference, referenceImageBase64, jobId } = await req.json();
+    if (jobId) createJob(jobId, 3, theme || '');
 
     if (!jsonlAnalysis) {
       return NextResponse.json({ error: 'JSONL Analysis data is required' }, { status: 400 });
@@ -76,7 +78,18 @@ export async function POST(req: Request) {
       throw new Error('gpt-image-2 generate 응답이 비어 있습니다.');
     }
 
-    const transformedUrls = await Promise.all(slidePrompts.map(generateSlide));
+    const transformedUrls = await Promise.all(
+      slidePrompts.map(async (prompt, i) => {
+        try {
+          const url = await generateSlide(prompt);
+          if (jobId) updateJobSlide(jobId, i, { url });
+          return url;
+        } catch (e: any) {
+          if (jobId) updateJobSlide(jobId, i, { error: e.message });
+          throw e;
+        }
+      })
+    );
 
     return NextResponse.json({ transformedUrls });
 
