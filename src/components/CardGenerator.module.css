@@ -127,6 +127,44 @@
   box-shadow: var(--shadow-lg);
 }
 
+.exampleSection {
+  margin-top: -16px;
+  margin-bottom: 48px;
+}
+
+.exampleLabel {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.exampleGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.exampleTag {
+  padding: 8px 16px;
+  background: var(--surface-hover);
+  border: 1px solid var(--surface-border);
+  border-radius: 100px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.exampleTag:hover {
+  background: var(--primary-glow);
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-2px);
+}
+
 .heroContent {
   max-width: 500px;
 }
