@@ -18,10 +18,12 @@ export async function GET(req: Request) {
       }
     });
 
-    const contentType = response.headers['content-type'];
+    // Ensure content-type is a string to satisfy TypeScript/NextResponse
+    const contentType = response.headers['content-type']?.toString() || 'image/jpeg';
+    
     return new NextResponse(response.data, {
       headers: {
-        'Content-Type': contentType || 'image/jpeg',
+        'Content-Type': contentType,
         'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'public, max-age=86400'
       }
