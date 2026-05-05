@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       `${basePrompt} Focus: Action Slide (Conclusion). Minimalist and strong visual anchor for: ${theme}`
     ];
 
-    // 3. Generate high-quality images with gpt-image-2
+    // 3. Generate images with gpt-image-2 (returns b64_json by default)
     const responses = await Promise.all(
       prompts.map(prompt =>
         openai.images.generate({
@@ -63,16 +63,15 @@ export async function POST(req: Request) {
           n: 1,
           size: "1024x1536",
           quality: "high",
-          response_format: "b64_json",
         } as any)
       )
     );
 
     const transformedUrls = responses
       .map(res => {
-        const item = res.data?.[0];
+        const item = res.data?.[0] as any;
         if (!item) return null;
-        if ((item as any).b64_json) return `data:image/png;base64,${(item as any).b64_json}`;
+        if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
         if (item.url) return item.url;
         return null;
       })
@@ -85,7 +84,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ transformedUrls });
 
   } catch (error: any) {
-    console.error('Error in OpenAI API route:', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const detail = error?.error?.message || error?.message || String(error);
+    console.error('Transform route error:', detail, error?.status, error?.error);
+    return NextResponse.json({ error: detail }, { status: 500 });
   }
 }
