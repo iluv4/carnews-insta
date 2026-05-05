@@ -50,46 +50,48 @@ export async function POST(req: Request) {
     const slides = [
       {
         role: 'COVER',
-        text: `제목: "${copy.cover?.title}"\n부제: "${copy.cover?.subtitle}"`,
-        layout: 'Bold title at top center, subtitle below, strong hero visual at bottom half.',
+        text: `제목: "${copy.cover?.title}" / 부제: "${copy.cover?.subtitle}"`,
+        instruction: `Keep all people, faces, backgrounds, and visual elements from the reference image exactly as they appear.
+Redesign it as a professional Instagram card news COVER slide:
+- Add a semi-transparent dark gradient overlay at the top for text readability
+- Render the Korean title "${copy.cover?.title}" in large bold text at the top
+- Render the Korean subtitle "${copy.cover?.subtitle}" in smaller text below the title
+- Maintain the original image composition, people, and atmosphere underneath`,
       },
       {
         role: 'CONTENT',
-        text: `제목: "${copy.content?.title}"\n${(copy.content?.points || []).map((p: string) => `• ${p}`).join('\n')}`,
-        layout: 'Title at top, three bullet points with icons in the middle, clean footer.',
+        text: `제목: "${copy.content?.title}" / 포인트: ${(copy.content?.points || []).join(', ')}`,
+        instruction: `Keep all people, faces, backgrounds, and visual elements from the reference image.
+Redesign it as a professional Instagram card news CONTENT slide:
+- Add a semi-transparent overlay panel on one side or top for text
+- Render the Korean title "${copy.content?.title}" prominently
+- Render these Korean bullet points clearly: ${(copy.content?.points || []).map((p: string) => `• ${p}`).join(' / ')}
+- Maintain the original image people and atmosphere`,
       },
       {
         role: 'CLOSING CTA',
-        text: `헤드라인: "${copy.closing?.headline}"\nCTA: "${copy.closing?.cta}"`,
-        layout: 'Large headline centered, bold graphic below, CTA button at bottom.',
+        text: `헤드라인: "${copy.closing?.headline}" / CTA: "${copy.closing?.cta}"`,
+        instruction: `Keep all people, faces, backgrounds, and visual elements from the reference image.
+Redesign it as a professional Instagram card news CLOSING slide:
+- Add a bold overlay at bottom for CTA
+- Render the Korean headline "${copy.closing?.headline}" in large centered text
+- Render the CTA "${copy.closing?.cta}" as a button-style element at the bottom
+- Maintain the original image people and atmosphere`,
       },
     ];
 
-    // Step 2: Generate with reference image (images.edit) or text-only (images.generate)
     async function generateSlide(slide: typeof slides[0]): Promise<string> {
       const prompt = `You are a world-class Korean card news (카드뉴스) designer.
 
-TASK: Create a BRAND NEW "${slide.role}" slide about: "${theme}"
+TOPIC: "${theme}"
 
-⚠️ CRITICAL STYLE INSTRUCTION:
-The reference image is provided ONLY as a visual style guide.
-COMPLETELY DISCARD all content from the reference (people, faces, objects, text, backgrounds).
-Extract and replicate ONLY: color palette, gradient style, texture, typography mood, layout rhythm, and overall aesthetic.
-The output must be a 100% new original image — NOT a variation or edit of the reference.
+${slide.instruction}
 
-KOREAN TEXT TO RENDER (exact characters, bold and legible):
-${slide.text}
-
-LAYOUT: ${slide.layout}
-
-DESIGN DNA (from style analysis):
+DESIGN DNA (apply this color palette and style on top):
 ${dna}
 
-RULES:
-- Portrait 2:3 format. Ultra-high quality.
-- Render Korean text exactly as provided — sharp, modern sans-serif, highly legible
-- No human faces or bodies
-- Replicate the color palette and visual mood from the reference precisely`;
+TYPOGRAPHY: All Korean text must be sharp, bold, and perfectly legible. Modern sans-serif style.
+FORMAT: Portrait 2:3, ultra-high quality, professional Instagram aesthetic.`;
 
       if (referenceImageBase64) {
         const base64Data = referenceImageBase64.replace(/^data:image\/\w+;base64,/, '');
@@ -112,7 +114,6 @@ RULES:
         throw new Error('Empty response from images.edit');
       }
 
-      // Fallback: no reference image
       const res = await openai.images.generate({
         model: 'gpt-image-2',
         prompt,
