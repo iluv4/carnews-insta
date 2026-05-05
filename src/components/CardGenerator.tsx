@@ -3,15 +3,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './CardGenerator.module.css';
 import TemplateCard from './TemplateCard';
-import dynamic from 'next/dynamic';
 import { useSession, signIn } from 'next-auth/react';
 import { useTab } from '@/context/TabContext';
 import PortalDashboard from './PortalDashboard';
 
-const CanvasEditor = dynamic(() => import('./CanvasEditor'), { 
-  ssr: false,
-  loading: () => <div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>에디터 로딩 중...</div>
-});
 
 interface Template {
   id: string;
@@ -430,18 +425,40 @@ export default function CardGenerator() {
             )}
 
             {currentStep === 3 && (
-              <div className={styles.editorView}>
-                <div className={styles.editorHeader}>
-                  <button className="btn-secondary" onClick={() => setCurrentStep(2)}>← 내용 수정하기</button>
-                  <h2 className={styles.sectionTitle}>최종 편집 및 저장</h2>
+              <div className={styles.wizardCard}>
+                <div className={styles.sectionHeader}>
+                  <h2 className={styles.sectionTitle}>생성 완료 🎉</h2>
+                  <p className={styles.sectionDesc}>각 이미지를 클릭하면 확대해서 볼 수 있어요.</p>
                 </div>
-                <CanvasEditor imageUrl={resultImages[currentSlide]} />
-                <div className={styles.pagination}>
-                  {resultImages.map((_, i) => (
-                    <button key={i} onClick={() => setCurrentSlide(i)} className={currentSlide === i ? styles.active : ''}>
-                      {i + 1}
-                    </button>
+                <div className={styles.resultGrid}>
+                  {['COVER', 'CONTENT', 'CLOSING'].map((label, i) => (
+                    <div key={i} className={styles.resultCard}>
+                      <span className={styles.resultLabel}>{label}</span>
+                      {resultImages[i] ? (
+                        <>
+                          <a href={resultImages[i]} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={resultImages[i]}
+                              alt={label}
+                              className={styles.resultImg}
+                            />
+                          </a>
+                          <a
+                            href={resultImages[i]}
+                            download={`cardnews-${label.toLowerCase()}.png`}
+                            className={styles.resultDownloadBtn}
+                          >
+                            ↓ 다운로드
+                          </a>
+                        </>
+                      ) : (
+                        <div className={styles.resultSkeleton} />
+                      )}
+                    </div>
                   ))}
+                </div>
+                <div className={styles.actionGroup} style={{ marginTop: '32px' }}>
+                  <button className="btn-secondary" onClick={() => setCurrentStep(2)}>← 다시 생성하기</button>
                 </div>
               </div>
             )}
