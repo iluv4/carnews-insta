@@ -179,8 +179,20 @@ export default function CardGenerator() {
     }, 400);
 
     try {
-      // Convert all images to base64 in parallel (up to 5)
-      const base64Images = await Promise.all(imgList.slice(0, 5).map(imgUrlToBase64));
+      // Convert images to base64 — use allSettled so partial failures don't abort
+      setStatusText('레퍼런스 이미지 다운로드 중...');
+      const settled = await Promise.allSettled(imgList.slice(0, 5).map(imgUrlToBase64));
+      const base64Images = settled
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+        .map(r => r.value);
+
+      console.log(`[analyze] ${base64Images.length}/${Math.min(imgList.length, 5)} images converted`);
+
+      if (base64Images.length === 0) {
+        throw new Error('이미지를 로드할 수 없습니다. 다시 시도해주세요.');
+      }
+
+      setStatusText(`${base64Images.length}장 이미지 AI 분석 중...`);
 
       const analyzeRes = await fetch('/api/analyze', {
         method: 'POST',
@@ -188,21 +200,20 @@ export default function CardGenerator() {
         body: JSON.stringify({ imageUrls: base64Images }),
       });
       const data = await analyzeRes.json();
-      if (!analyzeRes.ok) throw new Error(data.error);
+      if (!analyzeRes.ok) throw new Error(data.error || '분석 오류');
 
       clearInterval(progressInterval);
       clearInterval(statusInterval);
       setProgress(100);
       setJsonlData(data.analysis);
-      // Use first image as the primary reference for gpt-image-2 edit
       setReferenceImageBase64(base64Images[0]);
       setStatusText('스타일 학습 완료!');
       return data.analysis;
     } catch (error: any) {
       clearInterval(progressInterval);
       clearInterval(statusInterval);
-      console.error(error);
-      setStatusText(`Error: ${error.message}`);
+      console.error('[analyze error]', error);
+      setStatusText(`분석 실패: ${error.message}`);
     } finally {
       setAnalyzing(false);
     }
