@@ -134,43 +134,31 @@ export default function CardGenerator() {
     }, 1500);
     
     try {
-      // 1. Fetch image via proxy and compress it to Base64 (with retry)
-      const compressedImage = await new Promise<string>((resolve, reject) => {
-        const tryLoad = (useProxy: boolean) => {
+      // 1. Fetch image via Base64 proxy (Sever-side conversion to bypass CORS)
+      let compressedImage = '';
+      try {
+        const base64Res = await fetch(`/api/proxy/base64?url=${encodeURIComponent(imgToAnalyze)}`);
+        const base64Data = await base64Res.json();
+        if (!base64Res.ok) throw new Error(base64Data.error);
+        compressedImage = base64Data.dataUrl;
+      } catch (err) {
+        console.warn('Base64 proxy failed, falling back to legacy loader...');
+        // Legacy fallback (just in case)
+        compressedImage = await new Promise<string>((resolve, reject) => {
           const img = new Image();
           img.crossOrigin = "anonymous";
-          img.src = useProxy 
-            ? `/api/proxy?url=${encodeURIComponent(imgToAnalyze)}`
-            : imgToAnalyze; // Try direct if proxy fails
-            
+          img.src = `/api/proxy?url=${encodeURIComponent(imgToAnalyze)}`;
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 800; 
-            let width = img.width;
-            let height = img.height;
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-            canvas.width = width;
-            canvas.height = height;
             const ctx = canvas.getContext('2d');
-            ctx?.drawImage(img, 0, 0, width, height);
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx?.drawImage(img, 0, 0);
             resolve(canvas.toDataURL('image/jpeg', 0.8));
           };
-          
-          img.onerror = () => {
-            if (useProxy) {
-              console.warn('Proxy load failed, trying direct...');
-              tryLoad(false); // Try direct as fallback
-            } else {
-              reject(new Error('이미지 로드에 최종 실패했습니다. 다른 링크를 시도해 주세요.'));
-            }
-          };
-        };
-
-        tryLoad(true); // Start with proxy
-      });
+          img.onerror = () => reject(new Error('이미지 로드에 최종 실패했습니다.'));
+        });
+      }
 
       const analyzeRes = await fetch('/api/analyze', {
         method: 'POST',
