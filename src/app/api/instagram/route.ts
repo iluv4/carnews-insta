@@ -56,64 +56,39 @@ export async function POST(req: Request) {
 
       console.log(`[instagram] fetching profile media for @${username}`);
 
-      // Try userMediaByUsername endpoint
+      // Use /posts endpoint (confirmed working 2026)
       try {
         const res = await axios.post(
-          `https://${RAPIDAPI_HOST}/api/instagram/userMediaByUsername`,
+          `https://${RAPIDAPI_HOST}/api/instagram/posts`,
           { username },
           { headers: headers(apiKey), timeout: 15000 }
         );
 
-        const posts: any[] = res.data?.items || res.data?.data?.items || res.data || [];
+        const edges: any[] = res.data?.result?.edges || [];
         const images: string[] = [];
 
-        for (const post of posts) {
+        for (const edge of edges) {
+          const node = edge.node;
+          if (!node) continue;
+
           // carousel post
-          if (post.carousel_media) {
-            for (const slide of post.carousel_media) {
-              const img = slide.image_versions2?.candidates?.[0]?.url || slide.url;
+          if (node.carousel_media?.length > 0) {
+            for (const slide of node.carousel_media) {
+              const img = slide.image_versions2?.candidates?.[0]?.url;
               if (img) images.push(img);
             }
           } else {
-            const img =
-              post.image_versions2?.candidates?.[0]?.url ||
-              post.url || post.pictureUrl ||
-              post.urls?.[0]?.url;
+            const img = node.image_versions2?.candidates?.[0]?.url;
             if (img) images.push(img);
           }
         }
 
         if (images.length > 0) {
-          console.log(`[instagram] got ${images.length} images from profile @${username}`);
+          console.log(`[instagram] got ${images.length} images from @${username} via /posts`);
           return NextResponse.json({ images, source: 'profile' });
         }
       } catch (err: any) {
-        console.error('[instagram] userMediaByUsername error:', err.response?.data || err.message);
-      }
-
-      // Fallback: userInfoByUsername → get 12 post shortcodes → fetch each
-      try {
-        const infoRes = await axios.post(
-          `https://${RAPIDAPI_HOST}/api/instagram/userInfoByUsername`,
-          { username },
-          { headers: headers(apiKey), timeout: 12000 }
-        );
-
-        const edge = infoRes.data?.data?.user?.edge_owner_to_timeline_media?.edges || [];
-        const images: string[] = [];
-
-        for (const edge_item of edge.slice(0, 12)) {
-          const node = edge_item.node;
-          if (node?.display_url) images.push(node.display_url);
-          else if (node?.thumbnail_src) images.push(node.thumbnail_src);
-        }
-
-        if (images.length > 0) {
-          console.log(`[instagram] got ${images.length} images via userInfo @${username}`);
-          return NextResponse.json({ images, source: 'profile-info' });
-        }
-      } catch (err: any) {
-        console.error('[instagram] userInfoByUsername error:', err.response?.data || err.message);
+        console.error('[instagram] /posts error:', err.response?.data || err.message);
       }
 
       return NextResponse.json({ error: `프로필 @${username} 에서 이미지를 가져오지 못했습니다.` }, { status: 502 });
