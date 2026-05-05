@@ -72,8 +72,8 @@ export default function LandingPage() {
           </div>
           <div className={styles.showcaseGrid}>
             {[
-              { img: "/showcase_tech_card_1777974357934.png", title: "2026 UX Trend" },
-              { img: "/showcase_car_review_card_1777974377034.png", title: "Porsche Review" },
+              { img: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80&w=600", title: "2026 UX Trend" },
+              { img: "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=600", title: "Porsche Review" },
               { img: "https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&q=80&w=600", title: "Minimal Marketing" },
               { img: "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=600", title: "AI-Native Design" }
             ].map((item, idx) => (
