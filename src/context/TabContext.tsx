@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-type Tab = 'library' | 'generate' | 'settings';
+// Added portal-specific tab types to support vertical SaaS client portals
+type Tab = 'library' | 'generate' | 'settings' | 'portal-buamdong' | 'portal-insurance' | 'portal-beauty' | 'portal-studio';
 
 interface TabContextType {
   activeTab: Tab;
@@ -12,7 +13,7 @@ interface TabContextType {
 const TabContext = createContext<TabContextType | undefined>(undefined);
 
 export function TabProvider({ children }: { children: ReactNode }) {
-  const [activeTab, setActiveTab] = useState<Tab>('library');
+  const [activeTab, setActiveTab] = useState<Tab>('generate'); // Default to generation flow
 
   return (
     <TabContext.Provider value={{ activeTab, setActiveTab }}>
