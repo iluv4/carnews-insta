@@ -103,18 +103,20 @@ FORMAT: Portrait 2:3, ultra-high quality, professional Instagram aesthetic.`;
     throw new Error('Empty response');
   }
 
-  // SSE stream — emit each slide as soon as it's ready
+  // SSE stream — all 3 slides generate in parallel, emit each as soon as ready
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      for (let i = 0; i < slides.length; i++) {
-        try {
-          const url = await generateSlide(slides[i]);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ index: i, url })}\n\n`));
-        } catch (e: any) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ index: i, error: e.message })}\n\n`));
-        }
-      }
+      await Promise.all(
+        slides.map(async (slide, i) => {
+          try {
+            const url = await generateSlide(slide);
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ index: i, url })}\n\n`));
+          } catch (e: any) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ index: i, error: e.message })}\n\n`));
+          }
+        })
+      );
       controller.close();
     },
   });
