@@ -201,7 +201,7 @@ export default function CardGenerator() {
       const analyzeRes = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrls: base64Images }),
+        body: JSON.stringify({ imageUrls: base64Images, cacheKey: instagramUrl || undefined }),
       });
       const data = await analyzeRes.json();
       if (!analyzeRes.ok) throw new Error(data.error || '분석 오류');
@@ -211,7 +211,7 @@ export default function CardGenerator() {
       setProgress(100);
       setJsonlData(data.analysis);
       setReferenceImageBase64(base64Images[0]);
-      setStatusText('스타일 학습 완료!');
+      setStatusText(data.cached ? '✅ 캐시된 분석 결과 사용 (빠른 로드)' : '스타일 학습 완료!');
       return data.analysis;
     } catch (error: any) {
       clearInterval(progressInterval);
