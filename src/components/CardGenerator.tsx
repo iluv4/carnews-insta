@@ -50,8 +50,6 @@ export default function CardGenerator() {
   const [progress, setProgress] = useState(0);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [examplePreviews, setExamplePreviews] = useState<Record<string, string>>({});
-  const [shareJobId, setShareJobId] = useState<string | null>(null);
-  const [shareCopied, setShareCopied] = useState(false);
 
   const industryExamples = [
     { name: '부암동 맛집', url: 'https://www.instagram.com/p/DX6yodgiceN/' },
@@ -75,6 +73,13 @@ export default function CardGenerator() {
     fetchTemplates();
     fetchExamplePreviews();
   }, []);
+
+  useEffect(() => {
+    if (!generating) return;
+    setCurrentTipIndex(0);
+    const t = setInterval(() => setCurrentTipIndex(i => (i + 1) % loadingTips.length), 3500);
+    return () => clearInterval(t);
+  }, [generating]);
 
   const fetchExamplePreviews = async () => {
     const results = await Promise.allSettled(
@@ -253,11 +258,6 @@ export default function CardGenerator() {
     if (!jsonlData && !selectedTemplateId) return;
     setGenerating(true);
     setProgress(0);
-
-    const jobId = crypto.randomUUID();
-    setShareJobId(jobId);
-    setShareCopied(false);
-
     try {
       const res = await fetch('/api/transform', {
         method: 'POST',
@@ -267,7 +267,6 @@ export default function CardGenerator() {
           theme,
           reference: generationMode,
           referenceImageBase64,
-          jobId,
         })
       });
       const data = await res.json();
@@ -277,13 +276,6 @@ export default function CardGenerator() {
       }
     } catch (err) { console.error(err); }
     finally { setGenerating(false); }
-  };
-
-  const copyShareLink = () => {
-    if (!shareJobId) return;
-    navigator.clipboard.writeText(`${window.location.origin}/share/${shareJobId}`);
-    setShareCopied(true);
-    setTimeout(() => setShareCopied(false), 2000);
   };
 
   const steps = [
@@ -434,22 +426,6 @@ export default function CardGenerator() {
                   </button>
                 </div>
 
-                {generating && shareJobId && (
-                  <div className={styles.shareBanner}>
-                    <div className={styles.shareBannerText}>
-                      <span className={styles.shareDot} />
-                      <span>생성 중인 화면을 실시간으로 공유할 수 있어요</span>
-                    </div>
-                    <div className={styles.shareUrlRow}>
-                      <code className={styles.shareUrlCode}>
-                        {`${typeof window !== 'undefined' ? window.location.origin : ''}/share/${shareJobId}`}
-                      </code>
-                      <button className={styles.shareCopyBtn} onClick={copyShareLink}>
-                        {shareCopied ? '✅ 복사됨' : '🔗 복사'}
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -474,6 +450,26 @@ export default function CardGenerator() {
       </div>
 
       {statusText && <div className={styles.toast}>{statusText}</div>}
+
+      {generating && (
+        <div className={styles.generatingOverlay}>
+          <div className={styles.spinnerRing} />
+          <div className={styles.spinnerInner} />
+          <div className={styles.generatingContent}>
+            <p className={styles.generatingLabel}>AI 카드뉴스 생성 중</p>
+            <p className={styles.generatingTheme}>"{theme}"</p>
+            <div className={styles.generatingSlots}>
+              {['COVER', 'CONTENT', 'CLOSING'].map((label) => (
+                <div key={label} className={styles.generatingSlot}>
+                  <div className={styles.slotSkeleton} />
+                  <span className={styles.slotLabel}>{label}</span>
+                </div>
+              ))}
+            </div>
+            <p className={styles.generatingTip}>{loadingTips[currentTipIndex]}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
