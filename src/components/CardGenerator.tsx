@@ -383,14 +383,26 @@ export default function CardGenerator() {
                   {resultImages.map((img, i) => (
                     <div key={i} className={styles.imageItem} style={{ position: 'relative' }}>
                       <img src={img} alt={`슬라이드 ${i + 1}`} style={{ width: '100%', borderRadius: 12 }} />
-                      <a
-                        href={img}
-                        download={`cardnews_slide_${i + 1}.png`}
+                      <button
                         className={styles.modernBtn}
-                        style={{ display: 'block', textAlign: 'center', marginTop: 8 }}
+                        style={{ display: 'block', width: '100%', marginTop: 8 }}
+                        onClick={() => {
+                          const byteString = atob(img.split(',')[1]);
+                          const mime = img.split(',')[0].split(':')[1].split(';')[0];
+                          const ab = new ArrayBuffer(byteString.length);
+                          const ia = new Uint8Array(ab);
+                          for (let j = 0; j < byteString.length; j++) ia[j] = byteString.charCodeAt(j);
+                          const blob = new Blob([ab], { type: mime });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `cardnews_slide_${i + 1}.png`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
                       >
                         슬라이드 {i + 1} 저장
-                      </a>
+                      </button>
                     </div>
                   ))}
                 </div>
