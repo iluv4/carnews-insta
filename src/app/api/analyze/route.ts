@@ -14,6 +14,7 @@ export async function POST(req: Request) {
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
+    console.log('[analyze] API key present:', !!apiKey, '| length:', apiKey?.length);
     if (!apiKey || apiKey === 'your_openai_api_key_here' || apiKey === 'dummy_key') {
       const dummyJsonl = 
 `{"type":"background", "color":"#1a1a1a", "style":"gradient"}
