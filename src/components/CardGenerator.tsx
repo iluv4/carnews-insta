@@ -49,6 +49,7 @@ export default function CardGenerator() {
 
   const industryExamples = [
     { name: '식품', url: 'https://www.instagram.com/p/DWiwH4cAbZP/' },
+    { name: '소소한풍경', url: 'https://www.instagram.com/sosohanpoonggyeong/' },
   ];
 
   const loadingTips = [
