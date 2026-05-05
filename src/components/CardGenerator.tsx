@@ -27,8 +27,7 @@ export default function CardGenerator() {
   
   // Navigation & Stepper State
   const [currentStep, setCurrentStep] = useState(0);
-  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
-
+  
   // UI States
   const [statusText, setStatusText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -109,9 +108,37 @@ export default function CardGenerator() {
     }
   };
 
-  const handleAnalyze = async (specificImg?: string) => {
-    const imgUrl = specificImg || extractedImages[selectedImageIndex];
-    if (!imgUrl) return;
+  const imgUrlToBase64 = (imgUrl: string): Promise<string> => {
+    const isInstagramUrl = imgUrl.includes('instagram.com') || imgUrl.includes('cdninstagram.com');
+    const proxyUrl = isInstagramUrl ? `/api/proxy?url=${encodeURIComponent(imgUrl)}` : imgUrl;
+
+    return new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = proxyUrl;
+
+      img.onload = () => {
+        const MAX_SIZE = 1024;
+        const scale = Math.min(1, MAX_SIZE / Math.max(img.width || 1, img.height || 1));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = () => {
+        fetch(`/api/proxy/base64?url=${encodeURIComponent(imgUrl)}`)
+          .then(res => res.json())
+          .then(data => data.base64 ? resolve(data.base64) : reject(new Error('이미지 로딩 최종 실패')))
+          .catch(() => reject(new Error('이미지 로드에 최종 실패했습니다.')));
+      };
+    });
+  };
+
+  const handleAnalyze = async (specificImgs?: string[]) => {
+    const imgList = specificImgs || extractedImages;
+    if (!imgList || imgList.length === 0) return;
 
     setAnalyzing(true);
     setProgress(0);
@@ -129,47 +156,23 @@ export default function CardGenerator() {
     }, 400);
 
     try {
-      // 1. Convert image to Base64 via proxy to bypass CORS/NotSameOrigin
-      const isInstagramUrl = imgUrl.includes('instagram.com') || imgUrl.includes('cdninstagram.com');
-      const proxyUrl = isInstagramUrl ? `/api/proxy?url=${encodeURIComponent(imgUrl)}` : imgUrl;
-
-      const base64Image = await new Promise<string>((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = proxyUrl;
-        
-        img.onload = () => {
-          const MAX_SIZE = 1024;
-          const scale = Math.min(1, MAX_SIZE / Math.max(img.width || 1, img.height || 1));
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.round(img.width * scale);
-          canvas.height = Math.round(img.height * scale);
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', 0.7));
-        };
-        img.onerror = () => {
-          // If streaming proxy fails, try the server-side base64 proxy as a hard fallback
-          fetch(`/api/proxy/base64?url=${encodeURIComponent(imgUrl)}`)
-            .then(res => res.json())
-            .then(data => data.base64 ? resolve(data.base64) : reject(new Error('이미지 로딩 최종 실패')))
-            .catch(() => reject(new Error('이미지 로드에 최종 실패했습니다.')));
-        };
-      });
+      // Convert all images to base64 in parallel (up to 5)
+      const base64Images = await Promise.all(imgList.slice(0, 5).map(imgUrlToBase64));
 
       const analyzeRes = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: base64Image }),
+        body: JSON.stringify({ imageUrls: base64Images }),
       });
       const data = await analyzeRes.json();
       if (!analyzeRes.ok) throw new Error(data.error);
-      
+
       clearInterval(progressInterval);
       clearInterval(statusInterval);
       setProgress(100);
       setJsonlData(data.analysis);
-      setReferenceImageBase64(base64Image);
+      // Use first image as the primary reference for gpt-image-2 edit
+      setReferenceImageBase64(base64Images[0]);
       setStatusText('스타일 학습 완료!');
       return data.analysis;
     } catch (error: any) {
@@ -193,7 +196,7 @@ export default function CardGenerator() {
       const images = await handleFetchImages(url);
       if (images && images.length > 0) {
         setSelectedImageIndex(0);
-        const analysis = await handleAnalyze(images[0]);
+        const analysis = await handleAnalyze(images);
         if (analysis) {
           setStatusText('맞춤형 스타일 학습 완료! 내용을 입력하세요.');
         } else {
@@ -214,10 +217,7 @@ export default function CardGenerator() {
     if (!jsonlData && !selectedTemplateId) return;
     setGenerating(true);
     setProgress(0);
-    // Go to step 3 immediately with empty slots
-    setResultImages(['', '', '']);
-    setCurrentStep(3);
-
+    
     try {
       const res = await fetch('/api/transform', {
         method: 'POST',
@@ -225,43 +225,17 @@ export default function CardGenerator() {
         body: JSON.stringify({
           jsonlAnalysis: jsonlData || templates.find(t => t.id === selectedTemplateId)?.content,
           theme,
+          reference: generationMode,
           referenceImageBase64,
-        }),
+        })
       });
-
-      if (!res.body) throw new Error('No response body');
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const { index, url, error } = JSON.parse(line.slice(6));
-            if (url) {
-              setResultImages(prev => {
-                const next = [...prev];
-                next[index] = url;
-                return next;
-              });
-              setProgress(Math.round(((index + 1) / 3) * 100));
-              setStatusText(`슬라이드 ${index + 1}/3 완료`);
-            }
-            if (error) console.error(`Slide ${index} error:`, error);
-          } catch {}
-        }
+      const data = await res.json();
+      if (data.transformedUrls) {
+        setResultImages(data.transformedUrls);
+        setCurrentStep(3);
       }
     } catch (err) { console.error(err); }
-    finally {
-      setGenerating(false);
-      setStatusText('');
-    }
+    finally { setGenerating(false); }
   };
 
   const steps = [
@@ -406,65 +380,15 @@ export default function CardGenerator() {
             {currentStep === 3 && (
               <div className={styles.editorView}>
                 <div className={styles.editorHeader}>
-                  <button className="btn-secondary" onClick={() => { setCurrentStep(2); setGenerating(false); }}>← 다시 생성</button>
-                  <h2 className={styles.sectionTitle}>
-                    {generating ? `생성 중... (${progress}%)` : '생성 완료 🎉'}
-                  </h2>
+                  <button className="btn-secondary" onClick={() => setCurrentStep(2)}>← 내용 수정하기</button>
+                  <h2 className={styles.sectionTitle}>최종 편집 및 저장</h2>
                 </div>
-                {generating && (
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ background: '#f1f5f9', borderRadius: 99, height: 6, overflow: 'hidden' }}>
-                      <div style={{ background: 'linear-gradient(90deg, #6366f1, #8b5cf6)', height: '100%', width: `${progress}%`, transition: 'width 0.5s ease', borderRadius: 99 }} />
-                    </div>
-                    <p style={{ textAlign: 'center', fontSize: '0.8rem', color: '#64748b', marginTop: 8 }}>
-                      {statusText || '슬라이드를 순서대로 생성하고 있어요. 완료된 카드부터 바로 확인할 수 있습니다.'}
-                    </p>
-                  </div>
-                )}
-                <div className={styles.imageGrid}>
-                  {resultImages.map((img, i) => (
-                    <div key={i} className={styles.imageItem} style={{ position: 'relative' }}>
-                      {img ? (
-                        <img
-                          src={img}
-                          alt={`슬라이드 ${i + 1}`}
-                          style={{ width: '100%', borderRadius: 12, cursor: 'zoom-in' }}
-                          onClick={() => setLightboxImg(img)}
-                        />
-                      ) : (
-                        <div style={{
-                          width: '100%', aspectRatio: '2/3', borderRadius: 12,
-                          background: 'linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)',
-                          backgroundSize: '200% 100%',
-                          animation: 'shimmer 1.5s infinite',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          flexDirection: 'column', gap: 8, color: '#94a3b8',
-                        }}>
-                          <div style={{ fontSize: 32 }}>✨</div>
-                          <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>슬라이드 {i + 1} 생성 중...</div>
-                        </div>
-                      )}
-                      {img && <button
-                        className={styles.modernBtn}
-                        style={{ display: 'block', width: '100%', marginTop: 8 }}
-                        onClick={() => {
-                          const byteString = atob(img.split(',')[1]);
-                          const mime = img.split(',')[0].split(':')[1].split(';')[0];
-                          const ab = new ArrayBuffer(byteString.length);
-                          const ia = new Uint8Array(ab);
-                          for (let j = 0; j < byteString.length; j++) ia[j] = byteString.charCodeAt(j);
-                          const blob = new Blob([ab], { type: mime });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `cardnews_slide_${i + 1}.png`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                        }}
-                      >
-                        슬라이드 {i + 1} 저장
-                      </button>}
-                    </div>
+                <CanvasEditor imageUrl={resultImages[currentSlide]} />
+                <div className={styles.pagination}>
+                  {resultImages.map((_, i) => (
+                    <button key={i} onClick={() => setCurrentSlide(i)} className={currentSlide === i ? styles.active : ''}>
+                      {i + 1}
+                    </button>
                   ))}
                 </div>
               </div>
@@ -474,24 +398,6 @@ export default function CardGenerator() {
       </div>
 
       {statusText && <div className={styles.toast}>{statusText}</div>}
-
-      {lightboxImg && (
-        <div
-          onClick={() => setLightboxImg(null)}
-          style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 9999, cursor: 'zoom-out',
-          }}
-        >
-          <img
-            src={lightboxImg}
-            alt="확대"
-            style={{ maxHeight: '90vh', maxWidth: '90vw', borderRadius: 12, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' }}
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
     </div>
   );
 }
