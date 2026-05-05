@@ -27,7 +27,8 @@ export default function CardGenerator() {
   
   // Navigation & Stepper State
   const [currentStep, setCurrentStep] = useState(0);
-  
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
+
   // UI States
   const [statusText, setStatusText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -382,7 +383,12 @@ export default function CardGenerator() {
                 <div className={styles.imageGrid}>
                   {resultImages.map((img, i) => (
                     <div key={i} className={styles.imageItem} style={{ position: 'relative' }}>
-                      <img src={img} alt={`슬라이드 ${i + 1}`} style={{ width: '100%', borderRadius: 12 }} />
+                      <img
+                        src={img}
+                        alt={`슬라이드 ${i + 1}`}
+                        style={{ width: '100%', borderRadius: 12, cursor: 'zoom-in' }}
+                        onClick={() => setLightboxImg(img)}
+                      />
                       <button
                         className={styles.modernBtn}
                         style={{ display: 'block', width: '100%', marginTop: 8 }}
@@ -413,6 +419,24 @@ export default function CardGenerator() {
       </div>
 
       {statusText && <div className={styles.toast}>{statusText}</div>}
+
+      {lightboxImg && (
+        <div
+          onClick={() => setLightboxImg(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 9999, cursor: 'zoom-out',
+          }}
+        >
+          <img
+            src={lightboxImg}
+            alt="확대"
+            style={{ maxHeight: '90vh', maxWidth: '90vw', borderRadius: 12, boxShadow: '0 30px 80px rgba(0,0,0,0.5)' }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
