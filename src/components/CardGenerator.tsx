@@ -376,15 +376,22 @@ export default function CardGenerator() {
             {currentStep === 3 && (
               <div className={styles.editorView}>
                 <div className={styles.editorHeader}>
-                  <button className="btn-secondary" onClick={() => setCurrentStep(2)}>← 내용 수정하기</button>
-                  <h2 className={styles.sectionTitle}>최종 편집 및 저장</h2>
+                  <button className="btn-secondary" onClick={() => setCurrentStep(2)}>← 다시 생성</button>
+                  <h2 className={styles.sectionTitle}>생성 완료</h2>
                 </div>
-                <CanvasEditor imageUrl={resultImages[currentSlide]} />
-                <div className={styles.pagination}>
-                  {resultImages.map((_, i) => (
-                    <button key={i} onClick={() => setCurrentSlide(i)} className={currentSlide === i ? styles.active : ''}>
-                      {i + 1}
-                    </button>
+                <div className={styles.imageGrid}>
+                  {resultImages.map((img, i) => (
+                    <div key={i} className={styles.imageItem} style={{ position: 'relative' }}>
+                      <img src={img} alt={`슬라이드 ${i + 1}`} style={{ width: '100%', borderRadius: 12 }} />
+                      <a
+                        href={img}
+                        download={`cardnews_slide_${i + 1}.png`}
+                        className={styles.modernBtn}
+                        style={{ display: 'block', textAlign: 'center', marginTop: 8 }}
+                      >
+                        슬라이드 {i + 1} 저장
+                      </a>
+                    </div>
                   ))}
                 </div>
               </div>
