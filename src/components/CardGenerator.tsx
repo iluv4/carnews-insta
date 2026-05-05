@@ -49,6 +49,7 @@ export default function CardGenerator() {
   const [newTemplateName, setNewTemplateName] = useState('');
   const [progress, setProgress] = useState(0);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  const [examplePreviews, setExamplePreviews] = useState<Record<string, string>>({});
 
   const industryExamples = [
     { name: '부암동 맛집', url: 'https://www.instagram.com/p/DX6yodgiceN/' },
@@ -70,7 +71,29 @@ export default function CardGenerator() {
 
   useEffect(() => {
     fetchTemplates();
+    fetchExamplePreviews();
   }, []);
+
+  const fetchExamplePreviews = async () => {
+    const results = await Promise.allSettled(
+      industryExamples.map(ex =>
+        fetch('/api/instagram', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: ex.url }),
+        })
+          .then(r => r.json())
+          .then(data => ({ url: ex.url, img: data.images?.[0] || null }))
+      )
+    );
+    const previews: Record<string, string> = {};
+    results.forEach(r => {
+      if (r.status === 'fulfilled' && r.value.img) {
+        previews[r.value.url] = r.value.img;
+      }
+    });
+    setExamplePreviews(previews);
+  };
 
   const fetchTemplates = async () => {
     try {
@@ -292,20 +315,31 @@ export default function CardGenerator() {
                 <div className={styles.quickTests}>
                   <p className={styles.quickLabel}>업종별 빠른 테스트:</p>
                   <div className={styles.chipGrid}>
-                    {industryExamples.map(ex => (
-                      <button key={ex.name} className={styles.modernChip} onClick={() => handleOneClickAnalyze(ex.url)}>
-                        <span className={styles.chipIcon}>
-                          {ex.name.includes('부암동') ? '🍲' : 
-                           ex.name.includes('병원') ? '🏥' : 
-                           ex.name.includes('보험') ? '🛡️' : 
-                           ex.name.includes('화장품') ? '💄' : 
-                           ex.name.includes('식당') ? '🍕' : 
-                           ex.name.includes('커피') ? '☕' : 
-                           ex.name.includes('무신사') ? '👕' : '🖱️'}
-                        </span>
-                        {ex.name}
-                      </button>
-                    ))}
+                    {industryExamples.map(ex => {
+                      const preview = examplePreviews[ex.url];
+                      return (
+                        <button key={ex.name} className={styles.modernChip} onClick={() => handleOneClickAnalyze(ex.url)}>
+                          {preview ? (
+                            <img
+                              src={`/api/proxy?url=${encodeURIComponent(preview)}`}
+                              alt={ex.name}
+                              className={styles.chipThumb}
+                            />
+                          ) : (
+                            <span className={styles.chipIcon}>
+                              {ex.name.includes('부암동') ? '🍲' :
+                               ex.name.includes('병원') ? '🏥' :
+                               ex.name.includes('보험') ? '🛡️' :
+                               ex.name.includes('화장품') ? '💄' :
+                               ex.name.includes('식당') ? '🍕' :
+                               ex.name.includes('커피') ? '☕' :
+                               ex.name.includes('무신사') ? '👕' : '🖱️'}
+                            </span>
+                          )}
+                          <span className={styles.chipLabel}>{ex.name}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
