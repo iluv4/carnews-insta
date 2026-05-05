@@ -68,21 +68,22 @@ export default function LandingPage() {
         <section id="showcase" className={styles.showcase}>
           <div className={styles.sectionHeader}>
             <h2 className={styles.sectionTitle}>AI 제작 쇼케이스</h2>
-            <p className={styles.sectionDesc}>실제 사용자들이 CarNews Insta로 생성한 고퀄리티 카드뉴스입니다.</p>
+            <p className={styles.sectionDesc}>실제 사용자들이 CarNews Insta로 생성한 고퀄리티 카드뉴스입니다. 클릭하여 직접 제작해 보세요.</p>
           </div>
           <div className={styles.showcaseGrid}>
             {[
-              { img: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600", title: "자동차 리뷰 스타일" },
-              { img: "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=600", title: "클래식 매거진 스타일" },
-              { img: "https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&q=80&w=600", title: "미니멀 뉴스 스타일" },
-              { img: "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=600", title: "다크 테크 스타일" }
+              { img: "/showcase_tech_card_1777974357934.png", title: "2026 UX Trend" },
+              { img: "/showcase_car_review_card_1777974377034.png", title: "Porsche Review" },
+              { img: "https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&q=80&w=600", title: "Minimal Marketing" },
+              { img: "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=600", title: "AI-Native Design" }
             ].map((item, idx) => (
-              <div key={idx} className={styles.showcaseItem}>
+              <Link href="/dashboard" key={idx} className={styles.showcaseItem}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={item.img} alt={item.title} className={styles.showcaseImg} />
                 <div className={styles.showcaseOverlay}>
-                  <span>{item.title}</span>
+                  <span>{item.title} - 제작하기</span>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </section>

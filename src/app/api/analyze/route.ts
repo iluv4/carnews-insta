@@ -25,21 +25,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ analysis: dummyJsonl });
     }
 
-    // Fetch image and convert to base64 to bypass OpenAI download errors
-    let base64Image;
-    try {
-      const imgRes = await fetch(imageUrl);
-      if (!imgRes.ok) throw new Error(`Failed to fetch image for analysis: ${imgRes.statusText}`);
-      const arrayBuffer = await imgRes.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      base64Image = `data:${imgRes.headers.get('content-type') || 'image/jpeg'};base64,${buffer.toString('base64')}`;
-    } catch (fetchError: any) {
-      console.error("Image Fetch Error:", fetchError);
-      return NextResponse.json({ error: `Error while downloading image: ${fetchError.message}` }, { status: 400 });
+    // Handle both URLs and Base64 images
+    let base64Image = imageUrl;
+    if (!imageUrl.startsWith('data:')) {
+      try {
+        const imgRes = await fetch(imageUrl);
+        if (!imgRes.ok) throw new Error(`Failed to fetch image for analysis: ${imgRes.statusText}`);
+        const arrayBuffer = await imgRes.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        base64Image = `data:${imgRes.headers.get('content-type') || 'image/jpeg'};base64,${buffer.toString('base64')}`;
+      } catch (fetchError: any) {
+        console.error("Image Fetch Error:", fetchError);
+        return NextResponse.json({ error: `Error while downloading image: ${fetchError.message}` }, { status: 400 });
+      }
     }
 
     const visionResponse = await openai.chat.completions.create({
-      model: "gpt-5.5",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",

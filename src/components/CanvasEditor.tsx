@@ -71,16 +71,10 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
       if (e.ctrlKey && e.key === 'v' && (window as any)._clipboard) {
         (window as any)._clipboard.clone().then((clonedObj: any) => {
           canvas.discardActiveObject();
-          clonedObj.set({
-            left: clonedObj.left + 20,
-            top: clonedObj.top + 20,
-            evented: true,
-          });
+          clonedObj.set({ left: clonedObj.left + 20, top: clonedObj.top + 20, evented: true });
           if (clonedObj.type === 'activeSelection') {
             clonedObj.canvas = canvas;
-            clonedObj.forEachObject((obj: any) => {
-              canvas.add(obj);
-            });
+            clonedObj.forEachObject((obj: any) => canvas.add(obj));
             clonedObj.setCoords();
           } else {
             canvas.add(clonedObj);
@@ -94,18 +88,12 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
 
     window.addEventListener('keydown', handleKeyDown);
 
-    // Load Background Image
     const imgElement = new Image();
     imgElement.crossOrigin = "anonymous";
     imgElement.src = `/api/proxy?url=${encodeURIComponent(imageUrl)}`;
     imgElement.onload = () => {
       canvas.setDimensions({ width: imgElement.width, height: imgElement.height });
-      const fabricImg = new fabric.FabricImage(imgElement, {
-        originX: 'left',
-        originY: 'top',
-        selectable: false,
-        evented: false,
-      });
+      const fabricImg = new fabric.FabricImage(imgElement, { originX: 'left', originY: 'top', selectable: false, evented: false });
       canvas.backgroundImage = fabricImg;
       canvas.requestRenderAll();
       saveHistory();
@@ -125,55 +113,28 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
     setHistoryIndex(prev => prev + 1);
   };
 
-  // Sync state with active selection
-  useEffect(() => {
-    if (!canvasInstance) return;
-
-    const onSelection = () => {
+  const updateTextOptions = (newOptions: Partial<typeof textOptions>) => {
+    const updated = { ...textOptions, ...newOptions };
+    setTextOptions(updated);
+    if (canvasInstance) {
       const activeObject = canvasInstance.getActiveObject() as fabric.Textbox;
       if (activeObject && activeObject.type === 'textbox') {
-        setActiveColor((activeObject.fill as string) || '#ffffff');
-        setFontWeight((activeObject.fontWeight as 'normal' | 'bold') || 'bold');
-        setTextAlign((activeObject.textAlign as 'left' | 'center' | 'right') || 'center');
+        activeObject.set(newOptions as any);
+        canvasInstance.requestRenderAll();
       }
-    };
-
-    canvasInstance.on('selection:created', onSelection);
-    canvasInstance.on('selection:updated', onSelection);
-
-    return () => {
-      canvasInstance.off('selection:created', onSelection);
-      canvasInstance.off('selection:updated', onSelection);
-    };
-  }, [canvasInstance]);
+    }
+  };
 
   const addText = () => {
     if (!canvasInstance) return;
-
-    const text = new fabric.Textbox('새로운 텍스트 입력', {
+    const text = new fabric.Textbox('새로운 텍스트', {
       left: canvasInstance.width! / 2,
       top: canvasInstance.height! / 2,
       originX: 'center',
       originY: 'center',
       width: canvasInstance.width! * 0.8,
-      fontSize: 60,
-      fill: activeColor,
-      fontWeight: fontWeight,
-      textAlign: textAlign,
-      fontFamily: fontFamily,
-      charSpacing: letterSpacing,
-      lineHeight: lineHeight,
-      opacity: opacity,
-      stroke: strokeWidth > 0 ? activeStrokeColor : undefined,
-      strokeWidth: strokeWidth,
-      shadow: new fabric.Shadow({
-        color: 'rgba(0,0,0,0.4)',
-        blur: 10,
-        offsetX: 2,
-        offsetY: 2
-      }),
+      ...textOptions
     });
-
     canvasInstance.add(text);
     canvasInstance.setActiveObject(text);
     canvasInstance.requestRenderAll();
@@ -190,179 +151,37 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
     }
   };
 
-  const updateActiveText = (prop: string, value: any) => {
-    if (!canvasInstance) return;
-    const activeObject = canvasInstance.getActiveObject() as fabric.Textbox;
-    if (activeObject && activeObject.type === 'textbox') {
-      activeObject.set(prop as any, value);
-      canvasInstance.requestRenderAll();
-    }
-  };
-
-  const undo = () => {
-    if (historyIndex > 0 && canvasInstance) {
-      const prev = history[historyIndex - 1];
-      canvasInstance.loadFromJSON(JSON.parse(prev)).then(() => {
-        canvasInstance.requestRenderAll();
-        setHistoryIndex(prevIdx => prevIdx - 1);
-      });
-    }
-  };
-
-  const redo = () => {
-    if (historyIndex < history.length - 1 && canvasInstance) {
-      const next = history[historyIndex + 1];
-      canvasInstance.loadFromJSON(JSON.parse(next)).then(() => {
-        canvasInstance.requestRenderAll();
-        setHistoryIndex(prevIdx => prevIdx + 1);
-      });
-    }
-  };
-
-  const handleDownload = () => {
+  const downloadImage = () => {
     if (!canvasInstance) return;
     canvasInstance.discardActiveObject();
     canvasInstance.requestRenderAll();
-
     setTimeout(() => {
       const dataURL = canvasInstance.toDataURL({ format: 'png', quality: 1, multiplier: 1 });
       const link = document.createElement('a');
       link.href = dataURL;
-      link.download = `carnews_${Date.now()}.png`;
+      link.download = `design_${Date.now()}.png`;
       link.click();
       onDownloadComplete?.();
     }, 100);
   };
 
-  const handleSaveToProject = async () => {
+  const saveToProject = async () => {
     if (!canvasInstance) return;
     setSaving(true);
     try {
-      // For now, we save the current background image URL as the reference
-      // In a real scenario, you'd upload the canvas state or the rendered image to a storage bucket (S3/Vercel Blob) first
       const res = await fetch('/api/cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageUrl: imageUrl, // The underlying AI generated image
-          theme: 'User Created Design',
-          jsonlData: JSON.stringify(canvasInstance.toJSON())
-        })
+        body: JSON.stringify({ imageUrl, jsonlData: JSON.stringify(canvasInstance.toJSON()) })
       });
-      if (res.ok) {
-        alert('보관함에 성공적으로 저장되었습니다! 💾');
-      } else {
-        throw new Error('저장 중 오류가 발생했습니다.');
-      }
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setSaving(false);
-    }
+      if (res.ok) alert('저장 성공!');
+    } catch (err) { alert('저장 실패'); }
+    finally { setSaving(false); }
   };
 
   return (
     <div className={styles.editorContainer}>
       <div className={styles.toolbar}>
-        <div className={styles.toolGroup}>
-          <button onClick={undo} className={styles.btnIcon} disabled={historyIndex <= 0}>↩️</button>
-          <button onClick={redo} className={styles.btnIcon} disabled={historyIndex >= history.length - 1}>↪️</button>
-        </div>
-
-        <div className={styles.toolGroup}>
-          <button onClick={addText} className={styles.btnAction}>
-            <span>+</span> 텍스트
-          </button>
-        </div>
-
-        <div className={styles.toolGroup}>
-          <select 
-            className={styles.select}
-            value={fontFamily}
-            onChange={(e) => {
-              setFontFamily(e.target.value);
-              updateActiveText('fontFamily', e.target.value);
-            }}
-          >
-            <option value="Pretendard, sans-serif">Pretendard</option>
-            <option value="'GmarketSansMedium', sans-serif">Gmarket Sans</option>
-            <option value="'Noto Sans KR', sans-serif">Noto Sans KR</option>
-            <option value="'Nanum Square', sans-serif">Nanum Square</option>
-          </select>
-        </div>
-
-        <div className={styles.toolGroup}>
-          <input
-            type="color"
-            className={styles.colorPicker}
-            value={activeColor}
-            onChange={(e) => {
-              setActiveColor(e.target.value);
-              updateActiveText('fill', e.target.value);
-            }}
-          />
-        </div>
-
-        <div className={styles.toolGroup}>
-          <button 
-            className={`${styles.toggleBtn} ${fontWeight === 'bold' ? styles.toggleBtnActive : ''}`}
-            onClick={() => {
-              const next = fontWeight === 'bold' ? 'normal' : 'bold';
-              setFontWeight(next);
-              updateActiveText('fontWeight', next);
-            }}
-          >
-            B
-          </button>
-        </div>
-
-        <div className={styles.toolGroup}>
-          <button 
-            className={`${styles.toggleBtn} ${textAlign === 'left' ? styles.toggleBtnActive : ''}`}
-            onClick={() => { setTextAlign('left'); updateActiveText('textAlign', 'left'); }}
-          >
-            L
-          </button>
-          <button 
-            className={`${styles.toggleBtn} ${textAlign === 'center' ? styles.toggleBtnActive : ''}`}
-            onClick={() => { setTextAlign('center'); updateActiveText('textAlign', 'center'); }}
-          >
-            C
-          </button>
-          <button 
-            className={`${styles.toggleBtn} ${textAlign === 'right' ? styles.toggleBtnActive : ''}`}
-            onClick={() => { setTextAlign('right'); updateActiveText('textAlign', 'right'); }}
-          >
-            R
-          </button>
-        </div>
-
-        <div className={styles.toolGroup}>
-          <label className={styles.toolLabel}>자간</label>
-          <input 
-            type="range" min="-100" max="500" step="10" 
-            className={styles.rangeInput}
-            value={letterSpacing}
-            onChange={(e) => {
-              const val = parseInt(e.target.value);
-              setLetterSpacing(val);
-              updateActiveText('charSpacing', val);
-            }}
-          />
-        </div>
-
-        <div className={styles.toolGroup}>
-          <label className={styles.toolLabel}>투명도</label>
-          <input 
-            type="range" min="0" max="1" step="0.1" 
-            className={styles.rangeInput}
-            value={opacity}
-            onChange={(e) => {
-              const val = parseFloat(e.target.value);
-              setOpacity(val);
-              updateActiveText('opacity', val);
-            }}
-          />
         </div>
 
         <button onClick={deleteSelected} className={styles.btnDelete}>

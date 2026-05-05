@@ -455,16 +455,16 @@ export default function CardGenerator() {
                   </button>
                 </form>
 
-                <div className={styles.exampleSection}>
-                  <span className={styles.exampleLabel}>업종별 빠른 테스트:</span>
-                  <div className={styles.exampleGrid}>
-                    {industryExamples.map((ex, idx) => (
+                <div className={styles.quickTests}>
+                  <p className={styles.quickTestLabel}>업종별 빠른 테스트:</p>
+                  <div className={styles.chipGroup}>
+                    {industryExamples.map((ex) => (
                       <button 
-                        key={idx} 
-                        className={styles.exampleTag}
+                        key={ex.name} 
+                        className={styles.chip}
                         onClick={() => {
                           setInstagramUrl(ex.url);
-                          handleFetchImages(ex.url);
+                          handleFetchImages(ex.url); // Instant fetch for WOW experience
                         }}
                       >
                         {ex.name}
@@ -544,9 +544,19 @@ export default function CardGenerator() {
                 <div className={styles.formGroup}>
                   <label className="label">적용된 스타일</label>
                   <div className={styles.selectedStyle}>
-                    {selectedTemplateId 
-                      ? templates.find(t => t.id === selectedTemplateId)?.name 
-                      : jsonlData ? '사용자 정의 스타일' : '선택된 스타일 없음'}
+                    {selectedTemplateId ? (
+                      <span className={`${styles.styleBadge} ${styles.templateBadge}`}>
+                        🏛️ {templates.find(t => t.id === selectedTemplateId)?.name || '기본 템플릿'}
+                      </span>
+                    ) : jsonlData ? (
+                      <span className={`${styles.styleBadge} ${styles.customBadge}`}>
+                        ✨ 커스텀 디자인 DNA (학습됨)
+                      </span>
+                    ) : (
+                      <span className={`${styles.styleBadge} ${styles.noneBadge}`}>
+                        ⚠️ 선택된 스타일 없음
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -569,19 +579,19 @@ export default function CardGenerator() {
                       className={`${styles.toggleBtn} ${generationMode === 'creative' ? styles.active : ''}`}
                       onClick={() => setGenerationMode('creative')}
                     >
-                      창의적 (GPT-2)
+                      Premium (GPT Image-2)
                     </button>
                     <button 
                       className={`${styles.toggleBtn} ${generationMode === 'strict' ? styles.active : ''}`}
                       onClick={() => setGenerationMode('strict')}
                     >
-                      구조 유지 (Strict)
+                      Strict (Design DNA)
                     </button>
                   </div>
                 </div>
 
-                <div style={{ marginTop: '32px', display: 'flex', gap: '12px' }}>
-                  <button className="btn-secondary" onClick={() => goToStep(0)}>스타일 변경</button>
+                <div className={styles.actionGroup}>
+                  <button className="btn-secondary" onClick={() => goToStep(0)}>← 스타일 변경</button>
                   <button 
                     className="btn-primary" 
                     style={{ flex: 1 }} 

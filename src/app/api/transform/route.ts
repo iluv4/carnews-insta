@@ -32,59 +32,55 @@ export async function POST(req: Request) {
     // Trim analysis data to stay within OpenAI prompt limits (4000 chars total)
     const trimmedAnalysis = jsonlAnalysis.substring(0, 3000); 
     
-    const basePrompt = `You are a world-class Graphic Designer. 
-    TASK: Generate a high-end Instagram card news image by PERFECTLY IMITATING the following Design DNA:
+    const basePrompt = `You are a world-class Graphic Designer and Art Director. 
+    TASK: Generate a high-end, professional Instagram card news background by PERFECTLY IMITATING the following Design DNA.
     ---
     DESIGN DNA (STRICT ADHERENCE REQUIRED):
     ${trimmedAnalysis}
     ---
     THEME TO APPLY: ${theme}
-    AESTHETIC TARGET: ${reference || 'Premium SaaS'}
+    AESTHETIC TARGET: ${reference || 'Premium SaaS, High-end Magazine, Minimalist Tech'}
     
-    GUIDELINES:
-    1. Color Palette: Use the exact HEX colors and mood identified in the DNA.
-    2. Layout: Replicate the structural logic (centered, top-heavy, etc.) from the DNA.
-    3. Background: Mimic the texture (glassmorphism, gradient, grain) precisely.
-    4. Text Safety: Leave clear, high-quality empty spaces for text overlays. DO NOT generate actual text in the image.
-    5. Quality: Produce a magazine-quality, studio-lit, professional result.
+    CRITICAL STYLE GUIDELINES:
+    1. EXTREME QUALITY: The result must be a magazine-quality, studio-lit, ultra-high-resolution (8K) professional image.
+    2. VIVID & PROFESSIONAL: Use advanced lighting (rim lighting, volumetric fog, ray tracing) and deep color depth.
+    3. TEXT SAFETY: Leave intentional, high-quality negative space for text. NEVER generate any letters, characters, or text in the image.
+    4. DESIGN DNA SYNERGY: Replicate the gradients, grain textures, and structural balance found in the DNA exactly.
+    5. PHOTOREALISM: If the theme involves objects or cars, use hyper-realistic rendering like Octane Render or Unreal Engine 5 aesthetic.
     `;
     
     const prompts = [
-      `${basePrompt} This is Slide 1 (Cover). Focus on a striking main visual for the theme: ${theme}`,
-      `${basePrompt} This is Slide 2 (Body Content). Focus on a balanced layout for the theme: ${theme}`,
-      `${basePrompt} This is Slide 3 (Conclusion). Focus on a simple layout with a call to action for: ${theme}`
+      `${basePrompt} Focus: Strike Slide (Cover). Most visually impactful shot for theme: ${theme}`,
+      `${basePrompt} Focus: Content Slide (Body). Balanced and clean layout for info about: ${theme}`,
+      `${basePrompt} Focus: Action Slide (Conclusion). Minimalist and strong visual anchor for: ${theme}`
     ];
 
-    // 3. Generate images with fallback: try gpt-image-2 first, fallback to dall-e-3 if needed
+    // 3. Generate high-quality images with gpt-image-2 (User requested)
     let responses;
     try {
-      // Try GPT Image-2
       responses = await Promise.all(
         prompts.map(prompt =>
           openai.images.generate({
-            model: "gpt-image-2",
+            model: "gpt-image-2", // Explicitly using the requested model name
             prompt,
             n: 1,
             size: "1024x1792",
             quality: "hd",
+            style: "vivid",
           })
-        )
-      );
-    } catch (gptError: any) {
-      console.warn("GPT Image-2 failed, falling back to DALL·E 3:", gptError.message);
-      // Fallback to DALL·E 3
-      responses = await Promise.all(
-        prompts.map(prompt =>
-          openai.images.generate({
-            model: "dall-e-3",
-            prompt,
-            n: 1,
-            size: "1024x1792",
-            quality: "hd",
-          })
-        )
-      );
-    }
+    // 3. Generate high-quality images with dall-e-3 (Enforced model)
+    let responses = await Promise.all(
+      prompts.map(prompt =>
+        openai.images.generate({
+          model: "dall-e-3",
+          prompt,
+          n: 1,
+          size: "1024x1792",
+          quality: "hd",
+          style: "vivid",
+        })
+      )
+    );
 
     const transformedUrls = responses.map(res => res.data?.[0]?.url).filter(Boolean);
 

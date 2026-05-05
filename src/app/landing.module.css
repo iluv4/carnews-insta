@@ -104,9 +104,9 @@
 }
 
 .preview {
-  margin-top: 80px;
-  padding: 0 40px;
-  max-width: 1200px;
+  margin-top: 40px;
+  padding: 0 24px;
+  max-width: 1000px;
   margin-left: auto;
   margin-right: auto;
   animation: slideUp 1s ease-out;
@@ -118,14 +118,19 @@
   border: 1px solid var(--surface-border);
   box-shadow: var(--shadow-xl);
   overflow: hidden;
-  aspect-ratio: 16 / 10;
+  max-height: 500px;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .previewImg {
   width: 100%;
-  height: 100%;
+  height: auto;
+  min-height: 300px;
   object-fit: cover;
+  filter: brightness(0.7);
 }
 
 .features {
