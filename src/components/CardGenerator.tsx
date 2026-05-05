@@ -436,12 +436,45 @@ export default function CardGenerator() {
                     )}
                   </div>
                 </div>
-                <textarea 
+                <textarea
                   className={styles.textarea}
                   value={theme}
                   onChange={(e) => setTheme(e.target.value)}
                   placeholder="부암동 맛집의 핵심 매력을 입력하세요..."
                 />
+
+                <div className={styles.formGroup}>
+                  <label className={styles.modernLabel}>
+                    내 사진 업로드
+                    <span style={{ color: '#94a3b8', fontWeight: 400, marginLeft: 6 }}>선택 — 업로드하면 내 사진 기반으로 생성</span>
+                  </label>
+                  <label className={styles.uploadArea}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setReferenceImageBase64(ev.target?.result as string);
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                    {referenceImageBase64?.startsWith('data:') ? (
+                      <div className={styles.uploadPreview}>
+                        <img src={referenceImageBase64} alt="uploaded" className={styles.uploadThumb} />
+                        <span className={styles.uploadDone}>✅ 내 사진 적용됨 — 클릭해서 변경</span>
+                      </div>
+                    ) : (
+                      <div className={styles.uploadPlaceholder}>
+                        <span style={{ fontSize: '1.8rem' }}>📷</span>
+                        <span>클릭해서 내 사진 업로드</span>
+                      </div>
+                    )}
+                  </label>
+                </div>
+
                 <div className={styles.actionGroup}>
                   <button className="btn-secondary" onClick={() => setCurrentStep(0)}>← 스타일 재선택</button>
                   <button className="btn-primary" onClick={handleGenerate} disabled={generating || !jsonlData}>
@@ -498,9 +531,8 @@ export default function CardGenerator() {
 
       {generating && (
         <div className={styles.generatingOverlay}>
-          <div className={styles.spinnerRing} />
-          <div className={styles.spinnerInner} />
           <div className={styles.generatingContent}>
+            <div className={styles.spinnerRing} />
             <p className={styles.generatingLabel}>AI 카드뉴스 생성 중</p>
             <p className={styles.generatingTheme}>"{theme}"</p>
             <div className={styles.generatingSlots}>
