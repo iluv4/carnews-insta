@@ -39,6 +39,7 @@ export default function CardGenerator() {
   const [extractedImages, setExtractedImages] = useState<string[]>([]);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   const [jsonlData, setJsonlData] = useState('');
+  const [referenceImageBase64, setReferenceImageBase64] = useState('');
   const [resultImages, setResultImages] = useState<string[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [theme, setTheme] = useState('');
@@ -167,6 +168,7 @@ export default function CardGenerator() {
       clearInterval(statusInterval);
       setProgress(100);
       setJsonlData(data.analysis);
+      setReferenceImageBase64(base64Image);
       setStatusText('스타일 학습 완료!');
       return data.analysis;
     } catch (error: any) {
@@ -216,10 +218,11 @@ export default function CardGenerator() {
       const res = await fetch('/api/transform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           jsonlAnalysis: jsonlData || templates.find(t => t.id === selectedTemplateId)?.content,
           theme,
-          reference: generationMode
+          reference: generationMode,
+          referenceImageBase64,
         })
       });
       const data = await res.json();
