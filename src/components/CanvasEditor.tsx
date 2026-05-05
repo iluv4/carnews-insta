@@ -313,6 +313,7 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
           <label className={styles.toolLabel}>자간</label>
           <input 
             type="range" min="-100" max="500" step="10" 
+            className={styles.rangeInput}
             value={letterSpacing}
             onChange={(e) => {
               const val = parseInt(e.target.value);
@@ -326,6 +327,7 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
           <label className={styles.toolLabel}>투명도</label>
           <input 
             type="range" min="0" max="1" step="0.1" 
+            className={styles.rangeInput}
             value={opacity}
             onChange={(e) => {
               const val = parseFloat(e.target.value);

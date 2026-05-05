@@ -186,7 +186,7 @@
   font-weight: 500;
 }
 
-input[type="range"] {
+.rangeInput {
   width: 80px;
   accent-color: #18181b;
 }

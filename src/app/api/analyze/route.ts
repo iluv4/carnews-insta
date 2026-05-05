@@ -42,11 +42,28 @@ export async function POST(req: Request) {
       model: "gpt-5.5",
       messages: [
         {
+          role: "system",
+          content: "You are a professional Senior UI/UX Designer and Design Analyst. Your task is to deconstruct a card news image into its fundamental 'Design DNA' tokens."
+        },
+        {
           role: "user",
           content: [
             { 
               type: "text", 
-              text: "Analyze this card news image in detail. Extract the background aesthetic, color palette, layout structure, and all text content. Output the result STRICTLY in JSONL format (one JSON object per line). Do not include any markdown formatting like ```jsonl. Example keys: type (background/title/body/graphic), content, color, position." 
+              text: `Analyze this reference image in extreme detail for style imitation. 
+              Extract the following Design DNA tokens:
+              1. Background: Exact HEX colors, textures (grain, glassmorphism, gradient), and lighting.
+              2. Typography: Font mood (modern, serif, bold), alignment, and text-shadow rules.
+              3. Layout: Structural logic (centered, asymmetrical, top-heavy) and white space utilization.
+              4. Graphic Elements: Shadows, borders, shapes, and icon styles.
+              5. Mood: 3-5 keywords describing the professional aesthetic.
+
+              OUTPUT: Strictly JSONL format (one JSON object per line). No markdown. 
+              Example:
+              {"type":"background_dna", "primary_color":"#FFFFFF", "texture":"soft_gradient", "mood":"clean"}
+              {"type":"typography_dna", "style":"sans-serif", "weight":"bold", "alignment":"center"}
+              {"type":"layout_dna", "structure":"golden_ratio", "focus":"top"}
+              `
             },
             {
               type: "image_url",

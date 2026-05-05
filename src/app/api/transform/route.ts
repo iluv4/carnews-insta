@@ -28,14 +28,23 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. Build premium prompts for a 3-slide carousel
-    const premiumKeywords = "professional photography, high-end magazine style, minimalist SaaS aesthetic, clean composition, studio lighting, 8k resolution, elegant, sophisticated";
-    const basePrompt = `Create a visually stunning, premium Instagram card news image. 
-    Aesthetic Style: ${reference || 'modern and sleek'}. 
-    Theme: ${theme}.
-    Structural Context: ${jsonlAnalysis}.
-    Keywords: ${premiumKeywords}.
-    IMPORTANT: Leave clear, empty spaces for text overlays. No text in the image itself.`;
+    // 2. Build precision prompts based on Design DNA
+    const basePrompt = `You are a world-class Graphic Designer. 
+    TASK: Generate a high-end Instagram card news image by PERFECTLY IMITATING the following Design DNA:
+    ---
+    DESIGN DNA (STRICT ADHERENCE REQUIRED):
+    ${jsonlAnalysis}
+    ---
+    THEME TO APPLY: ${theme}
+    AESTHETIC TARGET: ${reference || 'Premium SaaS'}
+    
+    GUIDELINES:
+    1. Color Palette: Use the exact HEX colors and mood identified in the DNA.
+    2. Layout: Replicate the structural logic (centered, top-heavy, etc.) from the DNA.
+    3. Background: Mimic the texture (glassmorphism, gradient, grain) precisely.
+    4. Text Safety: Leave clear, high-quality empty spaces for text overlays. DO NOT generate actual text in the image.
+    5. Quality: Produce a magazine-quality, studio-lit, professional result.
+    `;
     
     const prompts = [
       `${basePrompt} This is Slide 1 (Cover). Focus on a striking main visual for the theme: ${theme}`,
