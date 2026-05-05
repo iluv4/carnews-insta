@@ -83,11 +83,14 @@ export default function CardGenerator() {
     setResultImages([]);
     setCurrentSlide(0);
     
+    const targetUrl = typeof e === 'string' ? e : instagramUrl;
+    if (!targetUrl) return;
+
     try {
       const igRes = await fetch('/api/instagram', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: instagramUrl })
+        body: JSON.stringify({ url: targetUrl })
       });
       const igData = await igRes.json();
       
@@ -413,7 +416,7 @@ export default function CardGenerator() {
                         className={styles.exampleTag}
                         onClick={() => {
                           setInstagramUrl(ex.url);
-                          // Trigger analysis directly or let user click button
+                          handleFetchImages(ex.url);
                         }}
                       >
                         {ex.name}
