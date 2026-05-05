@@ -136,28 +136,54 @@ export default function CardGenerator() {
     try {
       // 1. Fetch image via Base64 proxy (Sever-side conversion to bypass CORS)
       let compressedImage = '';
+      console.log('Attempting to load image:', imgToAnalyze);
+      
       try {
         const base64Res = await fetch(`/api/proxy/base64?url=${encodeURIComponent(imgToAnalyze)}`);
         const base64Data = await base64Res.json();
         if (!base64Res.ok) throw new Error(base64Data.error);
         compressedImage = base64Data.dataUrl;
+        console.log('Success: Loaded via Base64 proxy');
       } catch (err) {
-        console.warn('Base64 proxy failed, falling back to legacy loader...');
-        // Legacy fallback (just in case)
-        compressedImage = await new Promise<string>((resolve, reject) => {
-          const img = new Image();
-          img.crossOrigin = "anonymous";
-          img.src = `/api/proxy?url=${encodeURIComponent(imgToAnalyze)}`;
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx?.drawImage(img, 0, 0);
-            resolve(canvas.toDataURL('image/jpeg', 0.8));
-          };
-          img.onerror = () => reject(new Error('이미지 로드에 최종 실패했습니다.'));
-        });
+        console.warn('Base64 proxy failed, trying public proxy (weserv.nl)...');
+        
+        // 2nd attempt: Use a public image proxy (weserv.nl)
+        try {
+          const publicProxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(imgToAnalyze)}&output=jpg&q=80`;
+          compressedImage = await new Promise<string>((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = publicProxyUrl;
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              ctx?.drawImage(img, 0, 0);
+              resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.onerror = () => reject(new Error('Public proxy failed'));
+          });
+          console.log('Success: Loaded via public proxy (weserv.nl)');
+        } catch (publicErr) {
+          console.warn('Public proxy failed, trying direct with proxy fallback...');
+          
+          // 3rd attempt: Legacy fallback (just in case)
+          compressedImage = await new Promise<string>((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = `/api/proxy?url=${encodeURIComponent(imgToAnalyze)}`;
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              ctx?.drawImage(img, 0, 0);
+              resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.onerror = () => reject(new Error('이미지 로딩의 모든 방법이 실패했습니다. 인스타 링크가 유효한지 확인해주세요.'));
+          });
+        }
       }
 
       const analyzeRes = await fetch('/api/analyze', {

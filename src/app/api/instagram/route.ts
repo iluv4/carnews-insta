@@ -35,33 +35,41 @@ export async function POST(req: Request) {
               "x-rapidapi-host": RAPIDAPI_HOST,
               "Content-Type": "application/json",
             },
-            timeout: 10000,
+            timeout: 12000,
           }
         );
         
-        // RapidAPI response can be an array or a single object depending on the specific endpoint version
         const data = response.data;
         let images: string[] = [];
 
+        // Comprehensive response parsing for various API versions
         if (Array.isArray(data)) {
-          images = data.map(item => item.urls?.[0]?.url || item.pictureUrl).filter(Boolean);
+          images = data.map(item => item.url || item.pictureUrl || item.urls?.[0]?.url).filter(Boolean);
         } else if (data && typeof data === 'object') {
-          // Some versions return a nested object
-          const media = data.items || [data];
-          images = media.map((item: any) => item.url || item.pictureUrl || item.urls?.[0]?.url).filter(Boolean);
+          const items = data.items || data.data?.items || [data];
+          images = items.map((item: any) => 
+            item.url || 
+            item.pictureUrl || 
+            item.urls?.[0]?.url || 
+            item.image_versions2?.candidates?.[0]?.url
+          ).filter(Boolean);
         }
 
         if (images.length > 0) {
+          console.log(`Successfully extracted ${images.length} images via RapidAPI`);
           return NextResponse.json({ images });
         }
       } catch (err: any) {
-        console.error('RapidAPI detailed failure:', err.response?.data || err.message);
+        console.error('RapidAPI Error Detail:', err.response?.data || err.message);
       }
     }
 
-    // 2. Fallback only if RapidAPI is unavailable or fails
-    const fallbackImages = [`https://www.instagram.com/p/${shortcode}/media/?size=l`];
-    return NextResponse.json({ images: fallbackImages, warning: 'RapidAPI failed, using public fallback.' });
+    // 2. Fallback to public sources if RapidAPI fails
+    const fallbackImages = [
+      `https://www.instagram.com/p/${shortcode}/media/?size=l`,
+      `https://images.weserv.nl/?url=instagram.com/p/${shortcode}/media/?size=l`
+    ];
+    return NextResponse.json({ images: fallbackImages, warning: 'Using fallback extraction.' });
 
   } catch (error: any) {
     console.error('Instagram Extraction Error:', error.message);
