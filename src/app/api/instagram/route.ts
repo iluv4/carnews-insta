@@ -23,7 +23,7 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.RAPIDAPI_KEY;
     
-    // 1. Try RapidAPI if key exists
+    // 1. Strictly prioritize RapidAPI for reliability
     if (apiKey && apiKey !== 'your_openai_api_key_here') {
       try {
         const response = await axios.post(
@@ -39,30 +39,29 @@ export async function POST(req: Request) {
           }
         );
         
-        if (response.data && response.data.length > 0) {
-          const images = response.data.map((item: any) => item.urls?.[0]?.url || item.pictureUrl).filter(Boolean);
-          if (images.length > 0) return NextResponse.json({ images });
+        // RapidAPI response can be an array or a single object depending on the specific endpoint version
+        const data = response.data;
+        let images: string[] = [];
+
+        if (Array.isArray(data)) {
+          images = data.map(item => item.urls?.[0]?.url || item.pictureUrl).filter(Boolean);
+        } else if (data && typeof data === 'object') {
+          // Some versions return a nested object
+          const media = data.items || [data];
+          images = media.map((item: any) => item.url || item.pictureUrl || item.urls?.[0]?.url).filter(Boolean);
         }
-      } catch (err) {
-        console.warn('RapidAPI failed, falling back to public viewer...');
+
+        if (images.length > 0) {
+          return NextResponse.json({ images });
+        }
+      } catch (err: any) {
+        console.error('RapidAPI detailed failure:', err.response?.data || err.message);
       }
     }
 
-    // 2. Powerful Fallback: Use a public Instagram media service (Simulated for robust UX)
-    // In a real production environment, you'd use a rotation of scrapers.
-    // For now, we'll provide a high-quality fallback that mimics the success.
-    console.log(`Extracting media for shortcode: ${shortcode}`);
-    
-    // Attempting a direct fetch from a known public proxy
-    const fallbackImages = [
-      `https://www.instagram.com/p/${shortcode}/media/?size=l`,
-      // Add more fallback sources here
-    ];
-
-    return NextResponse.json({ 
-      images: fallbackImages,
-      warning: 'Extracted via public fallback.'
-    });
+    // 2. Fallback only if RapidAPI is unavailable or fails
+    const fallbackImages = [`https://www.instagram.com/p/${shortcode}/media/?size=l`];
+    return NextResponse.json({ images: fallbackImages, warning: 'RapidAPI failed, using public fallback.' });
 
   } catch (error: any) {
     console.error('Instagram Extraction Error:', error.message);

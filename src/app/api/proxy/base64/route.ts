@@ -21,6 +21,13 @@ export async function GET(req: Request) {
     });
 
     const contentType = response.headers['content-type']?.toString() || 'image/jpeg';
+    
+    // Ensure we only process images to prevent AI analysis errors (400 Invalid MIME type)
+    if (!contentType.includes('image')) {
+      console.error('Invalid content type received:', contentType);
+      return NextResponse.json({ error: '가져온 데이터가 이미지가 아닙니다. 다른 링크를 시도해주세요.' }, { status: 400 });
+    }
+
     const base64 = Buffer.from(response.data).toString('base64');
     const dataUrl = `data:${contentType};base64,${base64}`;
 
