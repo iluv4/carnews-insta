@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 // Added portal-specific tab types to support vertical SaaS client portals
-type Tab = 'library' | 'generate' | 'settings' | 'portal-buamdong' | 'portal-insurance' | 'portal-beauty' | 'portal-studio';
+type Tab = 'generate' | 'portal-sosohan' | 'portal-insurance' | 'portal-beauty' | 'portal-studio';
 
 interface TabContextType {
   activeTab: Tab;

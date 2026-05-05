@@ -22,6 +22,46 @@ function normaliseUrl(url: string): string {
   return url.trim().replace(/\/+$/, '').split('?')[0].toLowerCase();
 }
 
+// 클라이언트 포털 설정
+// clientInstagramUrl: 해당 고객의 인스타 (내 사진 소스)
+// styleReferenceUrl: 레이아웃/디자인 DNA 학습용 레퍼런스
+const CLIENT_PORTALS: Record<string, {
+  name: string;
+  icon: string;
+  clientInstagramUrl: string;
+  styleReferenceUrl: string;
+  placeholder: string;
+}> = {
+  'portal-sosohan': {
+    name: '소소한풍경',
+    icon: '🍃',
+    clientInstagramUrl: SOSOHAN_URL,
+    styleReferenceUrl: 'https://www.instagram.com/p/DWiwH4cAbZP/',
+    placeholder: '소소한풍경 카드뉴스에 담을 내용을 입력하세요...',
+  },
+  'portal-insurance': {
+    name: '보험 설계 프로',
+    icon: '🛡️',
+    clientInstagramUrl: '', // 고객 인스타 URL 연동 후 추가
+    styleReferenceUrl: 'https://www.instagram.com/p/DXtZaX8EduP/',
+    placeholder: '보험 상품의 핵심 혜택을 입력하세요...',
+  },
+  'portal-beauty': {
+    name: '럭셔리 뷰티',
+    icon: '💄',
+    clientInstagramUrl: '', // 고객 인스타 URL 연동 후 추가
+    styleReferenceUrl: 'https://www.instagram.com/p/DVFHGrakybK/',
+    placeholder: '제품의 차별화 포인트를 입력하세요...',
+  },
+  'portal-studio': {
+    name: '감성 스튜디오',
+    icon: '📸',
+    clientInstagramUrl: '', // 고객 인스타 URL 연동 후 추가
+    styleReferenceUrl: 'https://www.instagram.com/p/DXTdPJvks-J/',
+    placeholder: '스튜디오/사진관의 감성을 담은 문구를 입력하세요...',
+  },
+};
+
 export default function CardGenerator() {
   const { data: session } = useSession();
   const { activeTab, setActiveTab } = useTab();
@@ -72,8 +112,54 @@ export default function CardGenerator() {
   useEffect(() => {
     fetchTemplates();
     fetchExamplePreviews();
-    preloadSosohanImages();
   }, []);
+
+  // 포털 탭 전환 시: 해당 클라이언트 사진 자동 로드 + 스타일 분석 자동 시작
+  useEffect(() => {
+    const portal = CLIENT_PORTALS[activeTab];
+    if (!portal) return;
+
+    setStatusText(`${portal.icon} ${portal.name} 포털 로딩 중...`);
+    setReferenceImages([]);
+    setJsonlData('');
+    setCurrentStep(2);
+
+    // 1) 클라이언트 인스타 사진 → 내 사진으로 로드
+    if (portal.clientInstagramUrl) {
+      fetch('/api/instagram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: portal.clientInstagramUrl }),
+      })
+        .then(r => r.json())
+        .then(async (data) => {
+          if (data.images?.length > 0) {
+            const settled = await Promise.allSettled(data.images.slice(0, 6).map(imgUrlToBase64));
+            const b64s = settled
+              .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+              .map(r => r.value);
+            if (b64s.length > 0) {
+              setReferenceImages(b64s);
+              setStatusText(`✅ ${portal.name} 사진 ${b64s.length}장 로드 완료`);
+            }
+          }
+        })
+        .catch(console.error);
+    }
+
+    // 2) 스타일 레퍼런스 분석 (캐시 우선)
+    if (portal.styleReferenceUrl) {
+      const cached = clientAnalysisCache[normaliseUrl(portal.styleReferenceUrl)];
+      if (cached) {
+        setJsonlData(cached);
+        setInstagramUrl(portal.styleReferenceUrl);
+      } else {
+        setInstagramUrl(portal.styleReferenceUrl);
+        // 비동기로 분석 실행
+        handleOneClickAnalyze(portal.styleReferenceUrl);
+      }
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (!generating) return;
@@ -87,31 +173,6 @@ export default function CardGenerator() {
     return () => { clearInterval(tipT); clearInterval(elapsedT); };
   }, [generating]);
 
-  // Pre-load sosohanpoonggyeong images as default "my photos"
-  const preloadSosohanImages = async () => {
-    try {
-      const res = await fetch('/api/instagram', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: SOSOHAN_URL }),
-      });
-      const data = await res.json();
-      if (data.images?.length > 0) {
-        // Convert first 5 to base64 in background
-        const urls = data.images.slice(0, 5);
-        const settled = await Promise.allSettled(urls.map(imgUrlToBase64));
-        const b64s = settled
-          .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
-          .map(r => r.value);
-        if (b64s.length > 0) {
-          setReferenceImages(b64s);
-          console.log(`[sosohan] pre-loaded ${b64s.length} images`);
-        }
-      }
-    } catch (e) {
-      console.error('[sosohan preload]', e);
-    }
-  };
 
   const fetchExamplePreviews = async () => {
     const results = await Promise.allSettled(
@@ -429,13 +490,18 @@ export default function CardGenerator() {
       </header>
 
       <div className={styles.content}>
-        {activeTab.startsWith('portal-') ? (
-          <PortalDashboard
-            portalId={activeTab}
-            onStart={(url) => handleOneClickAnalyze(url)}
-          />
-        ) : (
-          <>
+        {/* 포털 탭 배너 (탭 선택됐을 때 상단 인디케이터) */}
+        {CLIENT_PORTALS[activeTab] && (
+          <div className={styles.portalBanner}>
+            <span className={styles.portalBannerIcon}>{CLIENT_PORTALS[activeTab].icon}</span>
+            <span className={styles.portalBannerName}>{CLIENT_PORTALS[activeTab].name} 전용 포털</span>
+            {CLIENT_PORTALS[activeTab].clientInstagramUrl
+              ? <span className={styles.portalBannerSub}>사진 자동 로드 중...</span>
+              : <span className={styles.portalBannerSub} style={{ color: '#f59e0b' }}>⚠️ 인스타 URL 미연동</span>
+            }
+          </div>
+        )}
+        <>
             {currentStep === 0 && (
               <div className={styles.wizardCard}>
                 <div className={styles.sectionHeader}>
@@ -552,7 +618,7 @@ export default function CardGenerator() {
                   className={styles.textarea}
                   value={theme}
                   onChange={(e) => setTheme(e.target.value)}
-                  placeholder="부암동 맛집의 핵심 매력을 입력하세요..."
+                  placeholder={CLIENT_PORTALS[activeTab]?.placeholder || '카드뉴스에 담을 내용을 입력하세요...'}
                 />
 
                 <div className={styles.formGroup}>
@@ -657,8 +723,7 @@ export default function CardGenerator() {
                 </div>
               </div>
             )}
-          </>
-        )}
+        </>
       </div>
 
       {statusText && <div className={styles.toast}>{statusText}</div>}

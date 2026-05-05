@@ -179,6 +179,12 @@
   font-size: 1.1rem;
 }
 
+.activePortal {
+  background: #ede9fe;
+  color: #6d28d9;
+  font-weight: 700;
+}
+
 @media (max-width: 1024px) {
   .sidebar {
     width: 80px;

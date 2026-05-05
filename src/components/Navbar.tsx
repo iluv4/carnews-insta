@@ -7,7 +7,7 @@ import styles from './Navbar.module.css';
 
 export default function Navbar() {
   const { data: session } = useSession();
-  const { activeTab } = useTab();
+  const { activeTab, setActiveTab } = useTab();
 
   return (
     <aside className={styles.sidebar}>
@@ -18,6 +18,33 @@ export default function Navbar() {
       </Link>
 
       <nav className={styles.navMenu}>
+        <div className={styles.navDivider}>클라이언트 포털</div>
+        <div className={styles.portalLinks}>
+          <div
+            className={`${styles.portalItem} ${activeTab === 'portal-sosohan' ? styles.activePortal : ''}`}
+            onClick={() => setActiveTab('portal-sosohan')}
+          >
+            <span className={styles.portalIcon}>🍃</span> 소소한풍경
+          </div>
+          <div
+            className={`${styles.portalItem} ${activeTab === 'portal-insurance' ? styles.activePortal : ''}`}
+            onClick={() => setActiveTab('portal-insurance')}
+          >
+            <span className={styles.portalIcon}>🛡️</span> 보험 설계 프로
+          </div>
+          <div
+            className={`${styles.portalItem} ${activeTab === 'portal-beauty' ? styles.activePortal : ''}`}
+            onClick={() => setActiveTab('portal-beauty')}
+          >
+            <span className={styles.portalIcon}>💄</span> 럭셔리 뷰티
+          </div>
+          <div
+            className={`${styles.portalItem} ${activeTab === 'portal-studio' ? styles.activePortal : ''}`}
+            onClick={() => setActiveTab('portal-studio')}
+          >
+            <span className={styles.portalIcon}>📸</span> 감성 스튜디오
+          </div>
+        </div>
       </nav>
 
       <div className={styles.sidebarFooter}>
