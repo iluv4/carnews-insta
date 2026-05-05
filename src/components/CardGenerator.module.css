@@ -1043,3 +1043,227 @@
   background: #eef2ff;
   border-color: #6366f1;
 }
+
+/* ── Stepper clickable ── */
+.step {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.step:hover {
+  opacity: 0.75;
+}
+
+.stepCircle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid var(--surface-border);
+  flex-shrink: 0;
+}
+
+.activeStep .stepCircle {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-glow);
+}
+
+.completedStep .stepCircle {
+  background: #16a34a;
+  color: white;
+  border-color: #16a34a;
+}
+
+.stepTitle {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.activeStep .stepTitle {
+  color: var(--primary);
+}
+
+.completedStep .stepTitle {
+  color: var(--text-primary);
+}
+
+/* ── Elapsed time in overlay ── */
+.elapsedTime {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #a78bfa;
+  margin: -6px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.elapsedNote {
+  font-weight: 400;
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
+/* ── Reference image thumbnails (multi-upload) ── */
+.refThumbsGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.refThumbWrap {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 10px;
+  overflow: visible;
+}
+
+.refThumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 2px solid #e2e8f0;
+  display: block;
+}
+
+.refThumbRemove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: white;
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+
+.refThumbAdd {
+  width: 80px;
+  height: 80px;
+  border-radius: 10px;
+  border: 2px dashed #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.5rem;
+  color: #94a3b8;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.refThumbAdd:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: #f5f3ff;
+}
+
+/* ── Cached badge on chips ── */
+.cachedBadge {
+  color: #16a34a;
+  font-size: 0.75rem;
+}
+
+/* ── Modern label ── */
+.modernLabel {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+/* ── Mini progress fill ── */
+.miniProgressFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary) 0%, #a855f7 100%);
+  border-radius: 100px;
+  transition: width 0.3s ease-out;
+}
+
+/* ── Quick tests label ── */
+.quickLabel {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 0;
+}
+
+.quickTests {
+  margin-top: 8px;
+}
+
+/* ── Success badge ── */
+.successBadge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.successIcon {
+  font-size: 1.1rem;
+}
+
+.successText {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+/* ── Textarea ── */
+.textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s ease;
+  margin-bottom: 24px;
+  box-sizing: border-box;
+}
+
+.textarea:focus {
+  border-color: var(--primary);
+}
+
+/* ── Container ── */
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.header {
+  padding: 20px 40px;
+  border-bottom: 1px solid var(--surface-border);
+  flex-shrink: 0;
+}
+
+/* ── Shimmer keyframe (used by skeleton) ── */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

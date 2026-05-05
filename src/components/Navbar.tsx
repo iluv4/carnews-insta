@@ -7,7 +7,7 @@ import styles from './Navbar.module.css';
 
 export default function Navbar() {
   const { data: session } = useSession();
-  const { activeTab, setActiveTab } = useTab();
+  const { activeTab } = useTab();
 
   return (
     <aside className={styles.sidebar}>
@@ -18,44 +18,6 @@ export default function Navbar() {
       </Link>
 
       <nav className={styles.navMenu}>
-        <div 
-          className={`${styles.navItem} ${activeTab === 'generate' ? styles.active : ''}`}
-          onClick={() => setActiveTab('generate')}
-        >
-          <span className={styles.navIcon}>⚡</span>
-          카드뉴스 제작
-        </div>
-        <div 
-          className={`${styles.navItem} ${activeTab === 'library' ? styles.active : ''}`}
-          onClick={() => setActiveTab('library')}
-        >
-          <span className={styles.navIcon}>📚</span>
-          디자인 라이브러리
-        </div>
-        <div 
-          className={`${styles.navItem} ${activeTab === 'settings' ? styles.active : ''}`}
-          onClick={() => setActiveTab('settings')}
-        >
-          <span className={styles.navIcon}>⚙️</span>
-          설정 및 요금제
-        </div>
-
-        <div className={styles.navDivider}>클라이언트 포털</div>
-        
-        <div className={styles.portalLinks}>
-          <div className={styles.portalItem} onClick={() => setActiveTab('portal-buamdong')}>
-            <span className={styles.portalIcon}>🍲</span> 부암동 맛집 전용
-          </div>
-          <div className={styles.portalItem} onClick={() => setActiveTab('portal-insurance')}>
-            <span className={styles.portalIcon}>🛡️</span> 보험 설계 프로
-          </div>
-          <div className={styles.portalItem} onClick={() => setActiveTab('portal-beauty')}>
-            <span className={styles.portalIcon}>💄</span> 럭셔리 뷰티/코스메틱
-          </div>
-          <div className={styles.portalItem} onClick={() => setActiveTab('portal-studio')}>
-            <span className={styles.portalIcon}>📸</span> 감성 스튜디오/사진관
-          </div>
-        </div>
       </nav>
 
       <div className={styles.sidebarFooter}>

@@ -16,25 +16,31 @@ interface Template {
   user?: { name: string; image: string };
 }
 
+const SOSOHAN_URL = 'https://www.instagram.com/sosohanpoonggyeong/';
+
+function normaliseUrl(url: string): string {
+  return url.trim().replace(/\/+$/, '').split('?')[0].toLowerCase();
+}
+
 export default function CardGenerator() {
   const { data: session } = useSession();
   const { activeTab, setActiveTab } = useTab();
-  
+
   // Navigation & Stepper State
   const [currentStep, setCurrentStep] = useState(0);
-  
+
   // UI States
   const [statusText, setStatusText] = useState('');
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [generating, setGenerating] = useState(false);
-  
+
   // Data States
   const [instagramUrl, setInstagramUrl] = useState('');
   const [extractedImages, setExtractedImages] = useState<string[]>([]);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   const [jsonlData, setJsonlData] = useState('');
-  const [referenceImageBase64, setReferenceImageBase64] = useState('');
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [resultImages, setResultImages] = useState<string[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [theme, setTheme] = useState('');
@@ -44,32 +50,68 @@ export default function CardGenerator() {
   const [newTemplateName, setNewTemplateName] = useState('');
   const [progress, setProgress] = useState(0);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [examplePreviews, setExamplePreviews] = useState<Record<string, string>>({});
+  const [clientAnalysisCache, setClientAnalysisCache] = useState<Record<string, string>>({});
 
+  const generatingStartRef = useRef<number>(0);
 
   const industryExamples = [
     { name: '식품', url: 'https://www.instagram.com/p/DWiwH4cAbZP/' },
-    { name: '소소한풍경', url: 'https://www.instagram.com/sosohanpoonggyeong/' },
+    { name: '소소한풍경', url: SOSOHAN_URL },
   ];
 
   const loadingTips = [
     "Tip: 인스타그램 카드뉴스는 첫 장의 훅(Hook) 문구가 가장 중요합니다.",
     "Tip: 고대비 색상 조합은 가독성을 높여 이탈률을 줄여줍니다.",
     "Tip: 카드뉴스 본문은 1~2줄의 짧은 문장이 가장 잘 읽힙니다.",
-    "Tip: 마지막 슬라이드에 명확한 CTA(Call to Action)를 넣어보세요."
+    "Tip: 마지막 슬라이드에 명확한 CTA(Call to Action)를 넣어보세요.",
+    "Tip: GPT-Image-2가 레퍼런스 스타일을 정밀 학습하는 중입니다...",
   ];
 
   useEffect(() => {
     fetchTemplates();
     fetchExamplePreviews();
+    preloadSosohanImages();
   }, []);
 
   useEffect(() => {
     if (!generating) return;
+    generatingStartRef.current = Date.now();
+    setElapsedSeconds(0);
     setCurrentTipIndex(0);
-    const t = setInterval(() => setCurrentTipIndex(i => (i + 1) % loadingTips.length), 3500);
-    return () => clearInterval(t);
+    const tipT = setInterval(() => setCurrentTipIndex(i => (i + 1) % loadingTips.length), 3500);
+    const elapsedT = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - generatingStartRef.current) / 1000));
+    }, 1000);
+    return () => { clearInterval(tipT); clearInterval(elapsedT); };
   }, [generating]);
+
+  // Pre-load sosohanpoonggyeong images as default "my photos"
+  const preloadSosohanImages = async () => {
+    try {
+      const res = await fetch('/api/instagram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: SOSOHAN_URL }),
+      });
+      const data = await res.json();
+      if (data.images?.length > 0) {
+        // Convert first 5 to base64 in background
+        const urls = data.images.slice(0, 5);
+        const settled = await Promise.allSettled(urls.map(imgUrlToBase64));
+        const b64s = settled
+          .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+          .map(r => r.value);
+        if (b64s.length > 0) {
+          setReferenceImages(b64s);
+          console.log(`[sosohan] pre-loaded ${b64s.length} images`);
+        }
+      }
+    } catch (e) {
+      console.error('[sosohan preload]', e);
+    }
+  };
 
   const fetchExamplePreviews = async () => {
     const results = await Promise.allSettled(
@@ -183,7 +225,6 @@ export default function CardGenerator() {
     }, 400);
 
     try {
-      // Convert images to base64 — use allSettled so partial failures don't abort
       setStatusText('레퍼런스 이미지 다운로드 중...');
       const settled = await Promise.allSettled(imgList.slice(0, 5).map(imgUrlToBase64));
       const base64Images = settled
@@ -198,10 +239,11 @@ export default function CardGenerator() {
 
       setStatusText(`${base64Images.length}장 이미지 AI 분석 중...`);
 
+      const cacheKey = instagramUrl || undefined;
       const analyzeRes = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrls: base64Images, cacheKey: instagramUrl || undefined }),
+        body: JSON.stringify({ imageUrls: base64Images, cacheKey }),
       });
       const data = await analyzeRes.json();
       if (!analyzeRes.ok) throw new Error(data.error || '분석 오류');
@@ -210,7 +252,12 @@ export default function CardGenerator() {
       clearInterval(statusInterval);
       setProgress(100);
       setJsonlData(data.analysis);
-      setReferenceImageBase64(base64Images[0]);
+
+      // Save to client-side analysis cache
+      if (cacheKey) {
+        setClientAnalysisCache(prev => ({ ...prev, [normaliseUrl(cacheKey)]: data.analysis }));
+      }
+
       setStatusText(data.cached ? '✅ 캐시된 분석 결과 사용 (빠른 로드)' : '스타일 학습 완료!');
       return data.analysis;
     } catch (error: any) {
@@ -224,12 +271,22 @@ export default function CardGenerator() {
   };
 
   const handleOneClickAnalyze = async (url: string) => {
+    // Check client-side cache first — skip re-analysis if already done
+    const cached = clientAnalysisCache[normaliseUrl(url)];
+    if (cached) {
+      setInstagramUrl(url);
+      setJsonlData(cached);
+      setCurrentStep(2);
+      setStatusText('✅ 이미 분석된 스타일 — 바로 적용!');
+      return;
+    }
+
     setInstagramUrl(url);
-    setJsonlData(''); // Clear old data
-    setCurrentStep(2); 
+    setJsonlData('');
+    setCurrentStep(2);
     setAnalyzing(true);
     setStatusText('AI가 스타일을 실시간 학습 중입니다. 잠시만 기다려주세요...');
-    
+
     try {
       const images = await handleFetchImages(url);
       if (images && images.length > 0) {
@@ -245,7 +302,7 @@ export default function CardGenerator() {
       }
     } catch (err: any) {
       setStatusText(`오류: ${err.message}`);
-      setCurrentStep(0); // Error? Go back to retry
+      setCurrentStep(0);
     } finally {
       setAnalyzing(false);
     }
@@ -309,7 +366,7 @@ export default function CardGenerator() {
           jsonlAnalysis: jsonlData || templates.find(t => t.id === selectedTemplateId)?.content,
           theme,
           reference: generationMode,
-          referenceImageBase64,
+          referenceImageBase64: referenceImages[0] || '',
         })
       });
       const data = await res.json();
@@ -326,6 +383,21 @@ export default function CardGenerator() {
     finally { setGenerating(false); }
   };
 
+  const handleAddReferenceImages = (files: FileList) => {
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const b64 = ev.target?.result as string;
+        if (b64) setReferenceImages(prev => [...prev, b64]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleRemoveReferenceImage = (idx: number) => {
+    setReferenceImages(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const steps = [
     { title: '스타일 선택', completed: !!selectedTemplateId || !!jsonlData },
     { title: '스타일 학습', completed: !!jsonlData },
@@ -333,24 +405,34 @@ export default function CardGenerator() {
     { title: '편집 및 저장', completed: resultImages.length > 0 }
   ];
 
+  const navigableSteps: Record<number, number> = { 0: 0, 1: 0, 2: 2, 3: 3 };
+
   return (
     <div className={styles.container}>
       <header className={styles.header}>
         <div className={styles.stepper}>
-          {steps.map((s, i) => (
-            <div key={i} className={`${styles.step} ${currentStep === i ? styles.activeStep : ''}`}>
-              <div className={styles.stepCircle}>{s.completed ? '✓' : i + 1}</div>
-              <span className={styles.stepTitle}>{s.title}</span>
-            </div>
-          ))}
+          {steps.map((s, i) => {
+            const targetStep = navigableSteps[i] ?? i;
+            return (
+              <div
+                key={i}
+                className={`${styles.step} ${currentStep === i ? styles.activeStep : ''} ${s.completed ? styles.completedStep : ''}`}
+                onClick={() => setCurrentStep(targetStep)}
+                style={{ cursor: 'pointer' }}
+              >
+                <div className={styles.stepCircle}>{s.completed ? '✓' : i + 1}</div>
+                <span className={styles.stepTitle}>{s.title}</span>
+              </div>
+            );
+          })}
         </div>
       </header>
 
       <div className={styles.content}>
         {activeTab.startsWith('portal-') ? (
-          <PortalDashboard 
-            portalId={activeTab} 
-            onStart={(url) => handleOneClickAnalyze(url)} 
+          <PortalDashboard
+            portalId={activeTab}
+            onStart={(url) => handleOneClickAnalyze(url)}
           />
         ) : (
           <>
@@ -364,9 +446,9 @@ export default function CardGenerator() {
                 <div className={styles.urlInputContainer}>
                   <div className={styles.inputWrapper}>
                     <span className={styles.inputIcon}>🔗</span>
-                    <input 
-                      type="text" 
-                      value={instagramUrl} 
+                    <input
+                      type="text"
+                      value={instagramUrl}
                       onChange={(e) => setInstagramUrl(e.target.value)}
                       placeholder="https://www.instagram.com/p/..."
                       className={styles.modernInput}
@@ -376,12 +458,13 @@ export default function CardGenerator() {
                     {loading ? '추출 중...' : '이미지 분석 시작'}
                   </button>
                 </div>
-                
+
                 <div className={styles.quickTests}>
                   <p className={styles.quickLabel}>업종별 빠른 테스트:</p>
                   <div className={styles.chipGrid}>
                     {industryExamples.map(ex => {
                       const preview = examplePreviews[ex.url];
+                      const isCached = !!clientAnalysisCache[normaliseUrl(ex.url)];
                       return (
                         <div key={ex.name} className={styles.chipWrapper}>
                           <button className={styles.modernChip} onClick={() => handleOneClickAnalyze(ex.url)}>
@@ -394,7 +477,10 @@ export default function CardGenerator() {
                             ) : (
                               <span className={styles.chipIcon}>📷</span>
                             )}
-                            <span className={styles.chipLabel}>{ex.name}</span>
+                            <span className={styles.chipLabel}>
+                              {ex.name}
+                              {isCached && <span className={styles.cachedBadge}> ✓</span>}
+                            </span>
                           </button>
                           <button
                             className={styles.chipDownloadBtn}
@@ -414,8 +500,8 @@ export default function CardGenerator() {
                     <h3 className={styles.subTitle}>분석할 이미지를 선택하세요</h3>
                     <div className={styles.imageGrid}>
                       {extractedImages.map((img, i) => (
-                        <div 
-                          key={i} 
+                        <div
+                          key={i}
                           className={`${styles.imageItem} ${selectedImageIndex === i ? styles.selectedImg : ''}`}
                           onClick={() => setSelectedImageIndex(i)}
                         >
@@ -471,34 +557,56 @@ export default function CardGenerator() {
 
                 <div className={styles.formGroup}>
                   <label className={styles.modernLabel}>
-                    내 사진 업로드
-                    <span style={{ color: '#94a3b8', fontWeight: 400, marginLeft: 6 }}>선택 — 업로드하면 내 사진 기반으로 생성</span>
+                    내 사진
+                    <span style={{ color: '#94a3b8', fontWeight: 400, marginLeft: 6 }}>
+                      {referenceImages.length > 0
+                        ? `${referenceImages.length}장 로드됨 — 생성 시 내 사진 기반으로 적용`
+                        : '선택 — 업로드하면 내 사진 기반으로 생성'}
+                    </span>
                   </label>
-                  <label className={styles.uploadArea}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = (ev) => setReferenceImageBase64(ev.target?.result as string);
-                        reader.readAsDataURL(file);
-                      }}
-                    />
-                    {referenceImageBase64?.startsWith('data:') ? (
-                      <div className={styles.uploadPreview}>
-                        <img src={referenceImageBase64} alt="uploaded" className={styles.uploadThumb} />
-                        <span className={styles.uploadDone}>✅ 내 사진 적용됨 — 클릭해서 변경</span>
-                      </div>
-                    ) : (
+
+                  {/* Thumbnail grid of loaded reference images */}
+                  {referenceImages.length > 0 && (
+                    <div className={styles.refThumbsGrid}>
+                      {referenceImages.map((b64, idx) => (
+                        <div key={idx} className={styles.refThumbWrap}>
+                          <img src={b64} alt={`ref-${idx}`} className={styles.refThumb} />
+                          <button
+                            className={styles.refThumbRemove}
+                            onClick={() => handleRemoveReferenceImage(idx)}
+                            title="삭제"
+                          >×</button>
+                        </div>
+                      ))}
+                      {/* Add more button */}
+                      <label className={styles.refThumbAdd} title="사진 추가">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          style={{ display: 'none' }}
+                          onChange={(e) => e.target.files && handleAddReferenceImages(e.target.files)}
+                        />
+                        <span>+</span>
+                      </label>
+                    </div>
+                  )}
+
+                  {referenceImages.length === 0 && (
+                    <label className={styles.uploadArea}>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        style={{ display: 'none' }}
+                        onChange={(e) => e.target.files && handleAddReferenceImages(e.target.files)}
+                      />
                       <div className={styles.uploadPlaceholder}>
                         <span style={{ fontSize: '1.8rem' }}>📷</span>
-                        <span>클릭해서 내 사진 업로드</span>
+                        <span>클릭해서 내 사진 업로드 (여러 장 가능)</span>
                       </div>
-                    )}
-                  </label>
+                    </label>
+                  )}
                 </div>
 
                 <div className={styles.actionGroup}>
@@ -561,6 +669,12 @@ export default function CardGenerator() {
             <div className={styles.spinnerRing} />
             <p className={styles.generatingLabel}>AI 카드뉴스 생성 중</p>
             <p className={styles.generatingTheme}>"{theme}"</p>
+            <p className={styles.elapsedTime}>
+              {Math.floor(elapsedSeconds / 60) > 0
+                ? `${Math.floor(elapsedSeconds / 60)}분 ${elapsedSeconds % 60}초 경과`
+                : `${elapsedSeconds}초 경과`}
+              <span className={styles.elapsedNote}> · 보통 45~90초 소요</span>
+            </p>
             <div className={styles.generatingSlots}>
               {['COVER', 'CONTENT', 'CLOSING'].map((label) => (
                 <div key={label} className={styles.generatingSlot}>
