@@ -89,10 +89,26 @@
 
 /* Views */
 .wizardCard {
-  max-width: 700px;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 48px;
+  padding: 64px;
   animation: slideUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.searchForm {
+  display: flex;
+  gap: 12px;
+  margin-top: 32px;
+  margin-bottom: 48px;
+}
+
+.searchForm input {
+  flex: 1;
+}
+
+.searchForm button {
+  white-space: nowrap;
+  padding: 0 32px;
 }
 
 .libraryView {

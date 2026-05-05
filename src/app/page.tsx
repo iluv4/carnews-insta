@@ -65,6 +65,28 @@ export default function LandingPage() {
           </div>
         </section>
 
+        <section id="showcase" className={styles.showcase}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>AI 제작 쇼케이스</h2>
+            <p className={styles.sectionDesc}>실제 사용자들이 CarNews Insta로 생성한 고퀄리티 카드뉴스입니다.</p>
+          </div>
+          <div className={styles.showcaseGrid}>
+            {[
+              { img: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600", title: "자동차 리뷰 스타일" },
+              { img: "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=600", title: "클래식 매거진 스타일" },
+              { img: "https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&q=80&w=600", title: "미니멀 뉴스 스타일" },
+              { img: "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&q=80&w=600", title: "다크 테크 스타일" }
+            ].map((item, idx) => (
+              <div key={idx} className={styles.showcaseItem}>
+                <img src={item.img} alt={item.title} className={styles.showcaseImg} />
+                <div className={styles.showcaseOverlay}>
+                  <span>{item.title}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section id="features" className={styles.features}>
           <div className={styles.featureCard}>
             <div className={styles.featureIcon}>🧠</div>
@@ -86,6 +108,48 @@ export default function LandingPage() {
             <p className={styles.featureDesc}>
               생성된 결과물 위에 텍스트와 요소를 자유롭게 배치하고 수정하세요. 디자인은 AI가, 디테일은 당신이.
             </p>
+          </div>
+        </section>
+
+        <section id="pricing" className={styles.pricing}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>합리적인 요금제</h2>
+            <p className={styles.sectionDesc}>당신의 콘텐츠 창작 속도에 맞춰 선택하세요.</p>
+          </div>
+          <div className={styles.pricingGrid}>
+            <div className={styles.pricingCard}>
+              <div className={styles.planName}>Starter</div>
+              <div className={styles.planPrice}>₩0 <span>/ 월</span></div>
+              <ul className={styles.planFeatures}>
+                <li>월 5회 AI 생성</li>
+                <li>기본 템플릿 라이브러리</li>
+                <li>표준 화질 다운로드</li>
+              </ul>
+              <Link href="/dashboard" className="btn-secondary">시작하기</Link>
+            </div>
+            <div className={`${styles.pricingCard} ${styles.featuredPlan}`}>
+              <div className={styles.planBadge}>추천</div>
+              <div className={styles.planName}>Pro</div>
+              <div className={styles.planPrice}>₩19,000 <span>/ 월</span></div>
+              <ul className={styles.planFeatures}>
+                <li>무제한 AI 생성</li>
+                <li>커스텀 스타일 학습 기능</li>
+                <li>4K 초고화질 다운로드</li>
+                <li>우선 순위 지원</li>
+              </ul>
+              <Link href="/dashboard" className="btn-primary">무료 체험하기</Link>
+            </div>
+            <div className={styles.pricingCard}>
+              <div className={styles.planName}>Business</div>
+              <div className={styles.planPrice}>₩49,000 <span>/ 월</span></div>
+              <ul className={styles.planFeatures}>
+                <li>Pro의 모든 기능</li>
+                <li>팀 프로젝트 협업</li>
+                <li>API 액세스 권한</li>
+                <li>1:1 디자인 컨설팅</li>
+              </ul>
+              <Link href="/dashboard" className="btn-secondary">문의하기</Link>
+            </div>
           </div>
         </section>
       </main>
