@@ -108,88 +108,55 @@ export default function CardGenerator() {
   };
 
   const handleAnalyze = async (specificImg?: string) => {
-    const imgToAnalyze = specificImg || extractedImages[selectedImageIndex];
-    if (!imgToAnalyze) return;
+    const imgUrl = specificImg || extractedImages[selectedImageIndex];
+    if (!imgUrl) return;
 
     setAnalyzing(true);
     setProgress(0);
-    setStatusText('이미지 최적화 중...');
-    
-    // Simulated progress bar logic
-    const progressInterval = setInterval(() => {
-      setProgress(prev => (prev < 90 ? prev + Math.random() * 5 : prev));
-    }, 400);
+    setStatusText('AI가 디자인 DNA 분석 중...');
 
-    const statusRotation = [
-      '🧬 이미지 데이터 구조화 중...',
-      '🎨 브랜드 에스테틱 동기화 중...',
-      '📐 전문가용 레이아웃 패턴 학습 중...',
-      '✒️ 프리미엄 타이포그래피 분석 중...',
-      '✨ 디자인 완성도 정밀 검증 중...'
-    ];
+    const statusRotation = ['브랜드 컬러 추출 중...', '타이포그래피 패턴 분석 중...', '레이아웃 에스테틱 동기화 중...', '시각적 계층 구조 학습 중...'];
     let statusIdx = 0;
     const statusInterval = setInterval(() => {
       setStatusText(statusRotation[statusIdx % statusRotation.length]);
       statusIdx++;
-    }, 1500);
-    
+    }, 2500);
+
+    const progressInterval = setInterval(() => {
+      setProgress(prev => Math.min(prev + (100 - prev) * 0.1, 98));
+    }, 400);
+
     try {
-      // 1. Fetch image via Base64 proxy (Sever-side conversion to bypass CORS)
-      let compressedImage = '';
-      console.log('Attempting to load image:', imgToAnalyze);
-      
-      try {
-        const base64Res = await fetch(`/api/proxy/base64?url=${encodeURIComponent(imgToAnalyze)}`);
-        const base64Data = await base64Res.json();
-        if (!base64Res.ok) throw new Error(base64Data.error);
-        compressedImage = base64Data.dataUrl;
-        console.log('Success: Loaded via Base64 proxy');
-      } catch (err) {
-        console.warn('Base64 proxy failed, trying public proxy (weserv.nl)...');
+      // 1. Convert image to Base64 via proxy to bypass CORS/NotSameOrigin
+      const isInstagramUrl = imgUrl.includes('instagram.com') || imgUrl.includes('cdninstagram.com');
+      const proxyUrl = isInstagramUrl ? `/api/proxy?url=${encodeURIComponent(imgUrl)}` : imgUrl;
+
+      const base64Image = await new Promise<string>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = proxyUrl;
         
-        // 2nd attempt: Use a public image proxy (weserv.nl)
-        try {
-          const publicProxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(imgToAnalyze)}&output=jpg&q=80`;
-          compressedImage = await new Promise<string>((resolve, reject) => {
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.src = publicProxyUrl;
-            img.onload = () => {
-              const canvas = document.createElement('canvas');
-              const ctx = canvas.getContext('2d');
-              canvas.width = img.width;
-              canvas.height = img.height;
-              ctx?.drawImage(img, 0, 0);
-              resolve(canvas.toDataURL('image/jpeg', 0.8));
-            };
-            img.onerror = () => reject(new Error('Public proxy failed'));
-          });
-          console.log('Success: Loaded via public proxy (weserv.nl)');
-        } catch (publicErr) {
-          console.warn('Public proxy failed, trying direct with proxy fallback...');
-          
-          // 3rd attempt: Legacy fallback (just in case)
-          compressedImage = await new Promise<string>((resolve, reject) => {
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.src = `/api/proxy?url=${encodeURIComponent(imgToAnalyze)}`;
-            img.onload = () => {
-              const canvas = document.createElement('canvas');
-              const ctx = canvas.getContext('2d');
-              canvas.width = img.width;
-              canvas.height = img.height;
-              ctx?.drawImage(img, 0, 0);
-              resolve(canvas.toDataURL('image/jpeg', 0.8));
-            };
-            img.onerror = () => reject(new Error('이미지 로딩의 모든 방법이 실패했습니다. 인스타 링크가 유효한지 확인해주세요.'));
-          });
-        }
-      }
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = () => {
+          // If streaming proxy fails, try the server-side base64 proxy as a hard fallback
+          fetch(`/api/proxy/base64?url=${encodeURIComponent(imgUrl)}`)
+            .then(res => res.json())
+            .then(data => data.base64 ? resolve(data.base64) : reject(new Error('이미지 로딩 최종 실패')))
+            .catch(() => reject(new Error('이미지 로드에 최종 실패했습니다.')));
+        };
+      });
 
       const analyzeRes = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: compressedImage })
+        body: JSON.stringify({ imageUrl: base64Image }),
       });
       const data = await analyzeRes.json();
       if (!analyzeRes.ok) throw new Error(data.error);
@@ -357,10 +324,14 @@ export default function CardGenerator() {
             )}
 
             {currentStep === 2 && (
-              <div className={styles.view}>
-                <h2 className={styles.sectionTitle}>카드뉴스 내용 입력</h2>
+              <div className={styles.wizardCard}>
+                <div className={styles.sectionHeader}>
+                  <h2 className={styles.sectionTitle}>카드뉴스 내용 입력</h2>
+                  <p className={styles.sectionDesc}>방금 학습한 디자인 DNA를 바탕으로 새로운 카드를 만듭니다.</p>
+                </div>
+
                 <div className={styles.formGroup}>
-                  <label className="label">적용된 스타일</label>
+                  <label className={styles.modernLabel}>적용된 스타일</label>
                   <div className={`${styles.styleBadge} ${analyzing ? styles.pulse : ''}`}>
                     {analyzing ? (
                       <div className={styles.analysisProgressWrapper}>
@@ -373,7 +344,10 @@ export default function CardGenerator() {
                         </div>
                       </div>
                     ) : jsonlData ? (
-                      '✨ 커스텀 디자인 DNA (학습됨)'
+                      <div className={styles.successBadge}>
+                        <span className={styles.successIcon}>✨</span>
+                        <span className={styles.successText}>커스텀 디자인 DNA 학습 완료</span>
+                      </div>
                     ) : (
                       '⚠️ 선택된 스타일 없음 (분석 대기 중...)'
                     )}
