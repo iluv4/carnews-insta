@@ -7,7 +7,7 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { jsonlAnalysis, theme, reference, referenceImageBase64 } = await req.json();
+    const { jsonlAnalysis, theme } = await req.json();
 
     if (!jsonlAnalysis) {
       return NextResponse.json({ error: 'JSONL Analysis data is required' }, { status: 400 });
@@ -22,61 +22,70 @@ export async function POST(req: Request) {
           'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1000&auto=format&fit=crop',
           'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=1000&auto=format&fit=crop',
         ],
-        warning: 'Simulated response. Please add a valid OPENAI_API_KEY.',
+        warning: 'Simulated response.',
       });
     }
 
-    const trimmedAnalysis = jsonlAnalysis.substring(0, 2000);
+    const dna = jsonlAnalysis.substring(0, 2000);
 
-    const slidePrompts = [
-      `This is a cover slide. Apply theme: "${theme}". Use the same visual style, color palette, layout structure as the reference. Leave clean space for large title text. No text in the image.`,
-      `This is a content slide. Apply theme: "${theme}". Balanced layout with the same brand aesthetic as the reference. Leave space for body text. No text in the image.`,
-      `This is a closing slide. Apply theme: "${theme}". Minimalist, strong visual anchor matching the reference style. Leave space for CTA text. No text in the image.`,
+    const slides = [
+      {
+        role: 'COVER',
+        layout: `LAYOUT (STRICT):
+- TOP 20%: clean flat solid color band — headline text zone, completely flat with no texture
+- MIDDLE 50%: dominant hero visual (abstract shape, texture, or atmospheric scene) — NO FACES, NO PEOPLE
+- BOTTOM 30%: clean flat solid color band — subtitle zone, completely flat with no texture`,
+      },
+      {
+        role: 'CONTENT',
+        layout: `LAYOUT (STRICT):
+- TOP 20%: clean flat solid header band — title text zone
+- MIDDLE 60%: 2–3 visual info blocks or abstract icons in a grid — no people
+- BOTTOM 20%: clean flat footer strip — CTA text zone`,
+      },
+      {
+        role: 'CLOSING CTA',
+        layout: `LAYOUT (STRICT):
+- TOP 30%: clean flat dark band — closing headline zone
+- MIDDLE 40%: single bold centered abstract graphic element
+- BOTTOM 30%: clean flat brand-color band — CTA button zone`,
+      },
     ];
 
-    async function generateSlide(slidePrompt: string): Promise<string> {
-      // Use images.edit when reference image is available — feeds actual image style directly
-      if (referenceImageBase64) {
-        const base64Data = referenceImageBase64.replace(/^data:image\/\w+;base64,/, '');
-        const mimeMatch = referenceImageBase64.match(/^data:(image\/\w+);base64,/);
-        const mimeType = (mimeMatch?.[1] || 'image/png') as 'image/png' | 'image/jpeg' | 'image/webp';
-        const imageBuffer = Buffer.from(base64Data, 'base64');
-        const imageFile = new File([imageBuffer], 'reference.png', { type: mimeType });
+    const responses = await Promise.all(
+      slides.map(({ role, layout }) => {
+        const prompt = `You are a world-class Korean card news (카드뉴스) designer.
 
-        const fullPrompt = `Redesign this Instagram card news image for a new topic while keeping the EXACT same visual style, color scheme, typography mood, and layout structure from the reference image.\n\nDesign DNA reference:\n${trimmedAnalysis}\n\n${slidePrompt}`;
+TASK: Generate slide "${role}" for a card news series about: "${theme}"
 
-        const res = await (openai.images as any).edit({
+DESIGN DNA — replicate this visual style EXACTLY:
+${dna}
+
+${layout}
+
+RULES:
+1. Portrait 2:3 format. Ultra-high visual quality.
+2. NEVER render any letters, words, or text of any kind anywhere. Text zones must be left as clean flat color only.
+3. No human faces or bodies. Use abstract, graphic, or product visuals only.
+4. Colors, textures, and mood must precisely match the Design DNA.
+5. Flat text zones are intentional — make them look polished and designed, not empty.`;
+
+        return openai.images.generate({
           model: 'gpt-image-2',
-          image: imageFile,
-          prompt: fullPrompt.substring(0, 32000),
+          prompt,
           n: 1,
           size: '1024x1536',
           quality: 'high',
-        });
+        } as any);
+      })
+    );
 
-        const item = res.data?.[0] as any;
-        if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
-        if (item?.url) return item.url;
-        throw new Error('gpt-image-2 edit 응답이 비어 있습니다.');
-      }
-
-      // Fallback: generate without reference image
-      const fullPrompt = `Professional Instagram card news image. Design DNA:\n${trimmedAnalysis}\n\n${slidePrompt}`;
-      const res = await openai.images.generate({
-        model: 'gpt-image-2',
-        prompt: fullPrompt.substring(0, 32000),
-        n: 1,
-        size: '1024x1536',
-        quality: 'high',
-      } as any);
-
+    const transformedUrls = responses.map((res) => {
       const item = res.data?.[0] as any;
       if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
       if (item?.url) return item.url;
-      throw new Error('gpt-image-2 generate 응답이 비어 있습니다.');
-    }
-
-    const transformedUrls = await Promise.all(slidePrompts.map(generateSlide));
+      throw new Error('gpt-image-2 응답이 비어 있습니다.');
+    });
 
     return NextResponse.json({ transformedUrls });
 
