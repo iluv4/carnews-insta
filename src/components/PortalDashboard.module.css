@@ -1,0 +1,136 @@
+.portalContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 48px;
+  border-radius: var(--radius-2xl);
+  min-height: 100%;
+  animation: fadeIn 0.6s ease-out;
+  box-shadow: inset 0 0 100px rgba(255,255,255,0.5);
+}
+
+.portalHero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 24px;
+  max-width: 800px;
+}
+
+.portalBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-radius: 100px;
+  font-weight: 800;
+  font-size: 0.9rem;
+  letter-spacing: -0.02em;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.portalTitle {
+  font-size: 3rem;
+  font-weight: 900;
+  line-height: 1.1;
+  color: #1a1a1a;
+  letter-spacing: -0.05em;
+}
+
+.portalDesc {
+  font-size: 1.2rem;
+  color: #4b5563;
+  line-height: 1.6;
+  max-width: 600px;
+}
+
+.portalGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 24px;
+}
+
+.portalCard {
+  background: white;
+  padding: 32px;
+  border-radius: var(--radius-xl);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+  border: 1px solid rgba(0,0,0,0.05);
+  transition: transform 0.3s ease;
+}
+
+.portalCard:hover {
+  transform: translateY(-5px);
+}
+
+.cardLabel {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #1a1a1a;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tipList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tipList li {
+  position: relative;
+  padding-left: 24px;
+  color: #4b5563;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.tipList li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: var(--primary);
+  font-weight: 900;
+}
+
+.recommendedLink {
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px dashed #cbd5e1;
+}
+
+.recommendedLink p {
+  font-size: 0.9rem;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.linkCode {
+  display: block;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #334155;
+  word-break: break-all;
+  opacity: 0.7;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  .portalContainer {
+    padding: 24px;
+  }
+  .portalTitle {
+    font-size: 2.2rem;
+  }
+}

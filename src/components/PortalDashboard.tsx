@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import styles from './CardGenerator.module.css';
+import styles from './PortalDashboard.module.css';
 
 interface PortalConfig {
   id: string;
@@ -85,12 +85,12 @@ export default function PortalDashboard({ portalId, onStart }: PortalDashboardPr
   return (
     <div className={styles.portalContainer} style={{ backgroundColor: config.theme }}>
       <div className={styles.portalHero}>
-        <div className={styles.portalBadge} style={{ backgroundColor: config.accent + '20', color: config.accent }}>
+        <div className={styles.portalBadge} style={{ backgroundColor: config.accent + '15', color: config.accent }}>
           {config.icon} {config.name}
         </div>
         <h1 className={styles.portalTitle}>
           {config.name.split(' ').map((word, i) => (
-            <span key={i} style={word === '전용' || word === '프로' || word === '럭셔리' ? { color: config.accent } : {}}>
+            <span key={i} style={word === '전용' || word === '프로' || word === '럭셔리' || word === '감성' ? { color: config.accent } : {}}>
               {word}{' '}
             </span>
           ))}
@@ -99,7 +99,14 @@ export default function PortalDashboard({ portalId, onStart }: PortalDashboardPr
         
         <button 
           className="btn-primary" 
-          style={{ backgroundColor: config.accent, padding: '16px 40px', fontSize: '1.1rem' }}
+          style={{ 
+            backgroundColor: config.accent, 
+            padding: '20px 48px', 
+            fontSize: '1.2rem',
+            boxShadow: `0 10px 25px ${config.accent}40`,
+            border: 'none',
+            marginTop: '16px'
+          }}
           onClick={() => onStart(config.referenceLink)}
         >
           {config.icon} 맞춤형 AI 제작 시작하기
@@ -111,7 +118,7 @@ export default function PortalDashboard({ portalId, onStart }: PortalDashboardPr
           <h3 className={styles.cardLabel}>💡 전문가의 팁</h3>
           <ul className={styles.tipList}>
             {config.quickTips.map((tip, i) => (
-              <li key={i}>{tip}</li>
+              <li key={i} style={{ '--primary': config.accent } as React.CSSProperties}>{tip}</li>
             ))}
           </ul>
         </div>
