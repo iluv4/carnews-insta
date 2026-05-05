@@ -137,12 +137,14 @@ export default function CardGenerator() {
         img.src = proxyUrl;
         
         img.onload = () => {
+          const MAX_SIZE = 1024;
+          const scale = Math.min(1, MAX_SIZE / Math.max(img.width || 1, img.height || 1));
           const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
           const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL('image/jpeg', 0.8));
+          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
         };
         img.onerror = () => {
           // If streaming proxy fails, try the server-side base64 proxy as a hard fallback

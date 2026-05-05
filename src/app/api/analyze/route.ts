@@ -74,7 +74,7 @@ export async function POST(req: Request) {
           ],
         },
       ],
-      max_completion_tokens: 1000,
+      max_tokens: 1000,
     });
 
     const analysis = visionResponse.choices[0].message.content;
@@ -82,7 +82,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ analysis });
 
   } catch (error: any) {
-    console.error('Error in OpenAI Analysis route:', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const detail = error?.error?.message || error?.message || String(error);
+    console.error('Error in OpenAI Analysis route:', detail);
+    return NextResponse.json({ error: detail }, { status: 500 });
   }
 }
