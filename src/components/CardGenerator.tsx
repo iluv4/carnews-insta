@@ -137,6 +137,9 @@ export default function CardGenerator() {
 
   const handleOneClickAnalyze = async (url: string) => {
     setInstagramUrl(url);
+    setCurrentStep(2); // INSTANT JUMP for "Wow" effect
+    setStatusText('AI가 스타일을 실시간 학습 중입니다. 내용을 입력하는 동안 완료됩니다!');
+    
     const images = await handleFetchImages(url);
     if (images && images.length > 0) {
       await handleAnalyze(images[0]);
