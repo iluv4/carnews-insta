@@ -53,7 +53,7 @@ export async function POST(req: Request) {
           prompt: fullPrompt.substring(0, 32000),
           n: 1,
           size: '1024x1536',
-          quality: 'high',
+          quality: 'low',
         });
 
         const item = res.data?.[0] as any;
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
         prompt: fullPrompt.substring(0, 32000),
         n: 1,
         size: '1024x1536',
-        quality: 'high',
+        quality: 'low',
       } as any);
 
       const item = res.data?.[0] as any;
