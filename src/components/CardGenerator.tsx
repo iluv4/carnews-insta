@@ -108,9 +108,37 @@ export default function CardGenerator() {
     }
   };
 
-  const handleAnalyze = async (specificImg?: string) => {
-    const imgUrl = specificImg || extractedImages[selectedImageIndex];
-    if (!imgUrl) return;
+  const imgUrlToBase64 = (imgUrl: string): Promise<string> => {
+    const isInstagramUrl = imgUrl.includes('instagram.com') || imgUrl.includes('cdninstagram.com');
+    const proxyUrl = isInstagramUrl ? `/api/proxy?url=${encodeURIComponent(imgUrl)}` : imgUrl;
+
+    return new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = proxyUrl;
+
+      img.onload = () => {
+        const MAX_SIZE = 1024;
+        const scale = Math.min(1, MAX_SIZE / Math.max(img.width || 1, img.height || 1));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = () => {
+        fetch(`/api/proxy/base64?url=${encodeURIComponent(imgUrl)}`)
+          .then(res => res.json())
+          .then(data => data.base64 ? resolve(data.base64) : reject(new Error('이미지 로딩 최종 실패')))
+          .catch(() => reject(new Error('이미지 로드에 최종 실패했습니다.')));
+      };
+    });
+  };
+
+  const handleAnalyze = async (specificImgs?: string[]) => {
+    const imgList = specificImgs || extractedImages;
+    if (!imgList || imgList.length === 0) return;
 
     setAnalyzing(true);
     setProgress(0);
@@ -128,47 +156,23 @@ export default function CardGenerator() {
     }, 400);
 
     try {
-      // 1. Convert image to Base64 via proxy to bypass CORS/NotSameOrigin
-      const isInstagramUrl = imgUrl.includes('instagram.com') || imgUrl.includes('cdninstagram.com');
-      const proxyUrl = isInstagramUrl ? `/api/proxy?url=${encodeURIComponent(imgUrl)}` : imgUrl;
-
-      const base64Image = await new Promise<string>((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = proxyUrl;
-        
-        img.onload = () => {
-          const MAX_SIZE = 1024;
-          const scale = Math.min(1, MAX_SIZE / Math.max(img.width || 1, img.height || 1));
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.round(img.width * scale);
-          canvas.height = Math.round(img.height * scale);
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', 0.7));
-        };
-        img.onerror = () => {
-          // If streaming proxy fails, try the server-side base64 proxy as a hard fallback
-          fetch(`/api/proxy/base64?url=${encodeURIComponent(imgUrl)}`)
-            .then(res => res.json())
-            .then(data => data.base64 ? resolve(data.base64) : reject(new Error('이미지 로딩 최종 실패')))
-            .catch(() => reject(new Error('이미지 로드에 최종 실패했습니다.')));
-        };
-      });
+      // Convert all images to base64 in parallel (up to 5)
+      const base64Images = await Promise.all(imgList.slice(0, 5).map(imgUrlToBase64));
 
       const analyzeRes = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: base64Image }),
+        body: JSON.stringify({ imageUrls: base64Images }),
       });
       const data = await analyzeRes.json();
       if (!analyzeRes.ok) throw new Error(data.error);
-      
+
       clearInterval(progressInterval);
       clearInterval(statusInterval);
       setProgress(100);
       setJsonlData(data.analysis);
-      setReferenceImageBase64(base64Image);
+      // Use first image as the primary reference for gpt-image-2 edit
+      setReferenceImageBase64(base64Images[0]);
       setStatusText('스타일 학습 완료!');
       return data.analysis;
     } catch (error: any) {
@@ -192,7 +196,7 @@ export default function CardGenerator() {
       const images = await handleFetchImages(url);
       if (images && images.length > 0) {
         setSelectedImageIndex(0);
-        const analysis = await handleAnalyze(images[0]);
+        const analysis = await handleAnalyze(images);
         if (analysis) {
           setStatusText('맞춤형 스타일 학습 완료! 내용을 입력하세요.');
         } else {
