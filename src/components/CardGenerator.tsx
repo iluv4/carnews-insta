@@ -243,6 +243,26 @@ export default function CardGenerator() {
     }
   };
 
+  const autoDownload = async (url: string, filename: string) => {
+    try {
+      let href = url;
+      if (!url.startsWith('data:')) {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        href = URL.createObjectURL(blob);
+      }
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      if (!url.startsWith('data:')) URL.revokeObjectURL(href);
+    } catch (e) {
+      console.error('Auto-download failed:', e);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!jsonlData && !selectedTemplateId) return;
     setGenerating(true);
@@ -262,6 +282,11 @@ export default function CardGenerator() {
       if (data.transformedUrls) {
         setResultImages(data.transformedUrls);
         setCurrentStep(3);
+        // Auto-download all slides
+        const labels = ['cover', 'content', 'closing'];
+        data.transformedUrls.forEach((url: string, i: number) => {
+          setTimeout(() => autoDownload(url, `cardnews-${labels[i]}.png`), i * 400);
+        });
       }
     } catch (err) { console.error(err); }
     finally { setGenerating(false); }
