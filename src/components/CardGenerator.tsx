@@ -32,14 +32,14 @@ export default function CardGenerator() {
   
   // Example Links for Industries
   const industryExamples = [
-    { name: '병원', url: 'https://www.instagram.com/p/DBI7B86P0V5/' },
-    { name: '법률', url: 'https://www.instagram.com/p/DBI6_C8Pv-x/' },
-    { name: '식당(국밥)', url: 'https://www.instagram.com/p/DBI64h6Px_A/' },
-    { name: '이커머스', url: 'https://www.instagram.com/p/DBI6zErv-C_/' },
-    { name: '커피', url: 'https://www.instagram.com/p/DBI6t_ov-J_/' },
-    { name: '햄버거', url: 'https://www.instagram.com/p/DBI6pMvP-R_/' },
-    { name: '김치', url: 'https://www.instagram.com/p/DBI6j0PP-X_/' },
-    { name: '마우스', url: 'https://www.instagram.com/p/DBI6fHvP-d_/' },
+    { name: '병원', url: 'https://www.instagram.com/p/DXVWOHIDyEy/' },
+    { name: '법률', url: 'https://www.instagram.com/p/DXtZaX8EduP/' },
+    { name: '식당(성수)', url: 'https://www.instagram.com/p/DX6yodgiceN/' },
+    { name: '무신사(커머스)', url: 'https://www.instagram.com/p/DVFHGrakybK/' },
+    { name: '커피', url: 'https://www.instagram.com/p/DXTdPJvks-J/' },
+    { name: '햄버거(마케팅)', url: 'https://www.instagram.com/p/DWqmSYbiT-X/' },
+    { name: '김치', url: 'https://www.instagram.com/p/B_j5fU-gjbz/' },
+    { name: '테크(마우스)', url: 'https://www.instagram.com/p/DXQpKowoCsj/' },
   ];
 
   // Data States

@@ -29,11 +29,14 @@ export async function POST(req: Request) {
     }
 
     // 2. Build precision prompts based on Design DNA
+    // Trim analysis data to stay within OpenAI prompt limits (4000 chars total)
+    const trimmedAnalysis = jsonlAnalysis.substring(0, 3000); 
+    
     const basePrompt = `You are a world-class Graphic Designer. 
     TASK: Generate a high-end Instagram card news image by PERFECTLY IMITATING the following Design DNA:
     ---
     DESIGN DNA (STRICT ADHERENCE REQUIRED):
-    ${jsonlAnalysis}
+    ${trimmedAnalysis}
     ---
     THEME TO APPLY: ${theme}
     AESTHETIC TARGET: ${reference || 'Premium SaaS'}

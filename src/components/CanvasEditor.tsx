@@ -23,6 +23,7 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
   const [fontWeight, setFontWeight] = useState<'normal' | 'bold'>('bold');
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
   const [fontFamily, setFontFamily] = useState('Pretendard, sans-serif');
+  const [saving, setSaving] = useState(false);
 
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -233,6 +234,33 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
     }, 100);
   };
 
+  const handleSaveToProject = async () => {
+    if (!canvasInstance) return;
+    setSaving(true);
+    try {
+      // For now, we save the current background image URL as the reference
+      // In a real scenario, you'd upload the canvas state or the rendered image to a storage bucket (S3/Vercel Blob) first
+      const res = await fetch('/api/cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: imageUrl, // The underlying AI generated image
+          theme: 'User Created Design',
+          jsonlData: JSON.stringify(canvasInstance.toJSON())
+        })
+      });
+      if (res.ok) {
+        alert('보관함에 성공적으로 저장되었습니다! 💾');
+      } else {
+        throw new Error('저장 중 오류가 발생했습니다.');
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className={styles.editorContainer}>
       <div className={styles.toolbar}>
@@ -339,6 +367,10 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
 
         <button onClick={deleteSelected} className={styles.btnDelete}>
           삭제
+        </button>
+
+        <button onClick={handleSaveToProject} className={styles.btnSave} disabled={saving}>
+          {saving ? '저장 중...' : '📁 보관함 저장'}
         </button>
 
         <button onClick={handleDownload} className={styles.btnDownload}>

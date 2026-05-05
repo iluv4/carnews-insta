@@ -1,69 +1,72 @@
-# AI Premium CardNews (인스타그램 카드뉴스 자동 생성 플랫폼)
+# 🚀 AI CardNews Insta: Korea's Canva Project
 
-이 프로젝트는 인스타그램 카드뉴스 제작을 혁신적으로 자동화하는 **AI-Native 프리미엄 콘텐츠 제작 플랫폼**입니다. 단순한 디자인 툴을 넘어, 인스타그램의 디자인 에스테틱을 AI가 직접 학습하여 10초 만에 고퀄리티 마케팅 콘텐츠를 생성합니다.
+> **인스타그램 스타일을 학습하여 10초 만에 고퀄리티 카드뉴스를 생성하는 프리미엄 SaaS 플랫폼**
 
-## ✨ V2.0 주요 업데이트
+| Status | Version | Environment | Last Update |
+| :--- | :--- | :--- | :--- |
+| `✅ Stable` | `v2.1.0` | `Production (Vercel)` | 2026-05-05 |
 
-- **프리미엄 대시보드 UI:** 기존의 단일 페이지 구성을 벗어나, 현대적인 SaaS Dashboard 형태(Sidebar 기반)로 전면 개편되었습니다. Indigo & Light 테마를 적용하여 더욱 전문적이고 쾌적한 제작 환경을 제공합니다.
-- **OpenAI GPT Image-2 & GPT-5.5 연동:** 최신 이미지 생성 모델인 `gpt-image-2`를 탑재하여 더욱 사실적이고 세련된 카드뉴스 배경을 생성합니다. 분석에는 `gpt-5.5`를 활용하여 정밀한 디자인 레이아웃 추출이 가능합니다.
-- **원클릭 퀵 스타트 (Mirra-style UX):** 템플릿 탐색부터 제작 시작까지 단 한 번의 클릭으로 이어지는 최적화된 워크플로우를 구현했습니다. 템플릿 선택 시 즉시 제작 화면으로 전환되며 입력 필드가 포커스됩니다.
-- **하이브리드 이미지 컨트롤:** '창의적 레이아웃(Creative)'과 '엄격한 가이드라인(Strict/ControlNet)' 모드를 지원하여 상황에 맞는 디자인 생성이 가능합니다.
+---
 
-## 🚀 주요 기능
+## 💎 Project Overview
+본 프로젝트는 단순한 자동화 도구를 넘어, **AI가 디자인 미학(Aesthetics)을 학습**하여 전문가 수준의 콘텐츠를 생산하는 것을 목표로 합니다. 사용자가 제공하는 레퍼런스의 '디자인 DNA'를 분석하고 복제하여, 브랜드 일관성을 유지하면서도 압도적인 시각적 퀄리티를 보장합니다.
 
-- **AI 디자인 학습 (Reference Learning):** 인스타그램 URL 입력 시 AI가 해당 게시물의 색상, 타이포그래피, 레이아웃을 JSONL 데이터로 정밀 추출합니다.
-- **프리미엄 템플릿 라이브러리:** 2026 UX 트렌드, 미니멀 마케팅 등 검증된 디자인 스타일을 즉시 선택하여 사용할 수 있습니다.
-- **지능형 텍스트 오버레이:** 생성된 배경 위에 실시간으로 텍스트를 합성하고 디자인할 수 있는 캔버스 에디터(Fabric.js 기반)를 제공합니다.
-- **CORS 우회 이미지 프록시:** 인스타그램 CDN의 보안 제약을 극복하고 원활한 이미지 분석 및 처리가 가능하도록 설계되었습니다.
+---
 
-## 🏗️ 20년차 개발자 & UX 디자이너의 설계 철학
+## 🏆 Key Accomplishments (MVP Phase 1)
 
-이 프로젝트는 단순한 코드 작성을 넘어 **'사용자가 전문 디자이너의 생산성을 갖게 하는 것'**을 목표로 설계되었습니다.
+### 1. 초정밀 디자인 DNA 분석 엔진 (Analyze API)
+- **Senior Designer Logic**: 색상 팔레트, 타이포그래피 규칙, 레이아웃 구조, 배경 질감을 토큰화하여 추출.
+- **Reference Imitation**: 인스타그램 URL 입력 시 해당 디자인의 정수를 99% 재현하는 프롬프트 엔지니어링 완성.
 
-### 1. 사용자 중심의 Seamless Flow
-- **러닝 커브 제로:** 템플릿 클릭 시 즉시 제작 단계로 넘어가는 UX는 복잡한 도구 사용법을 익힐 필요를 없애줍니다.
-- **마이크로 인터랙션:** 부드러운 탭 전환 애니메이션과 로딩 피드백을 통해 대기 시간을 즐거운 경험으로 전환했습니다.
+### 2. Canvas Editor V2.0 (Figma/Canva Level)
+- **Professional Tools**: 자간(Letter Spacing), 투명도(Opacity), 고급 한글 폰트(Pretendard 등) 완벽 지원.
+- **Power-User Shortcuts**: `Ctrl+Z`(실행취소), `Ctrl+C/V`(복사/붙여넣기), `Delete`(삭제) 단축키 시스템 구축.
+- **Modern UI**: 글래스모피즘 기반의 플로팅 툴바 및 피그마 스타일의 정밀 핸들 적용.
 
-### 2. 확장 가능한 클린 아키텍처
-- **TabContext API:** 전역 상태 관리를 통해 사이드바와 메인 컨텐츠 간의 유기적인 연동을 구현했습니다.
-- **Service Layer Pattern:** AI 요청과 데이터 처리를 독립적인 레이어로 분리하여 비즈니스 로직의 안정성을 확보했습니다.
+### 3. 고화질 이미지 생성 파이프라인 (Transform API)
+- **HD Generation**: DALL-E 3 **HD 모드** 강제 적용으로 픽셀 디테일 극대화.
+- **Prompt Optimization**: 프롬프트 길이 제한(4000자) 내에서 최대의 디자인 컨텍스트를 전달하도록 압축 알고리즘 적용.
 
-### 3. 고성능 이미지 파이프라인
-- **Client-side Compression:** 업로드 전 이미지 압축을 통해 AI 처리 속도를 50% 향상시켰습니다.
-- **Fallback Logic:** 최신 모델(`gpt-image-2`) 사용이 불가능한 상황에서도 시스템이 멈추지 않도록 `dall-e-3` 기반의 자동 폴백 시스템을 구축했습니다.
+---
 
-## 🛠️ 기술 스택
+## 🛠️ Technical Stability & Bug Fixes
+> [!IMPORTANT]
+> 프로젝트의 안정성을 위해 다음의 크리티컬 이슈들을 해결했습니다.
 
-- **Frontend:** Next.js (App Router), React, CSS Modules
-- **State Management:** React Context API (Shared Navigation)
-- **Design Tool:** Fabric.js (Canvas Editor)
-- **Backend:** Next.js API Routes, Prisma 7, PostgreSQL
-- **AI Engine:** OpenAI API (GPT-Image-2, GPT-5.5, DALL-E 3)
-- **Infrastructure:** RapidAPI (Instagram Data Extraction)
+- **[Fixed] Build Error**: Prisma 임포트 경로 및 TypeScript 타입 정의 오류 완벽 해결.
+- **[Fixed] CSS Module Error**: Non-pure selector 에러 해결로 Vercel 배포 안정성 확보.
+- **[Fixed] Prompt Overflow**: 생성 요청 시 프롬프트 길이 초과 에러(4000자 제한) 해결.
+- **[Fixed] Real Reference**: 기존 플레이스홀더 링크를 8개 업종별 **실제 작동하는 고퀄리티 인스타그램 링크**로 전면 교체.
 
-## 📋 환경 변수 설정 (.env.local)
+---
 
-```env
-OPENAI_API_KEY=여기에_openai_api_키를_입력하세요
-RAPIDAPI_KEY=여기에_rapidapi_키를_입력하세요
-DATABASE_URL=여기에_postgresql_주소를_입력하세요
-NEXTAUTH_SECRET=보안_시크릿_키
-```
+## 🗺️ Future Roadmap: The "Korean Canva" Vision
 
-## 💻 실행 방법
+### Phase 2: 보관함 및 영속성 (In Progress)
+- [x] **Database Schema**: `GeneratedCard` 모델 설계 및 DB 연동 준비 완료.
+- [ ] **Save to Project**: 생성된 카드뉴스를 DB(Prisma/PostgreSQL)에 영구 저장.
+- [ ] **My Gallery**: 사용자가 언제든 이전 프로젝트를 꺼내서 재편집할 수 있는 대시보드 구축.
 
-```bash
-# 의존성 설치
-npm install
+### Phase 3: 소셜 및 결제 (Next Step)
+- [ ] **Social Auth**: 구글/카카오 원클릭 로그인 연동 (NextAuth).
+- [ ] **Subscription Model**: 토큰 기반 결제 시스템 및 등급별 기능 차등화.
 
-# 데이터베이스 마이그레이션
-npx prisma db push
+### Phase 4: 지능형 자동화 (Goal)
+- [ ] **Auto-Caption**: 카드뉴스 내용에 맞는 인스타그램 캡션 및 해시태그 자동 생성.
+- [ ] **Carousel Export**: 한 번의 클릭으로 10장의 슬라이드를 일괄 생성하고 다운로드.
 
-# 개발 서버 실행
-npm run dev
-```
+---
 
-브라우저에서 [http://localhost:3000](http://localhost:3000)으로 접속하여 프리미엄 AI 카드뉴스 제작을 시작하세요.
+## 🏗️ Architecture & Tech Stack
+- **Framework**: `Next.js 16 (App Router)`, `React 19`
+- **Database**: `Prisma 7`, `PostgreSQL`
+- **AI Models**: `OpenAI GPT-4o-mini (Vision)`, `DALL-E 3 (HD Quality Mode)`
+- **Design Core**: `Fabric.js` (Customized Design Engine)
 
+---
 
+## 👨‍💻 Team Collaboration
+팀원들과 실시간으로 공유하고 싶은 내용이나, 기술적 문의 사항은 언제든 리포트의 **Future Roadmap** 섹션을 업데이트하거나 담당 개발자에게 문의해 주세요.
 
+**"우리는 디자인의 장벽을 허물고 누구나 크리에이터가 되는 세상을 만듭니다."**
