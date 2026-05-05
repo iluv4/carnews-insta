@@ -31,7 +31,7 @@ export async function GET(req: Request) {
     const base64 = Buffer.from(response.data).toString('base64');
     const dataUrl = `data:${contentType};base64,${base64}`;
 
-    return NextResponse.json({ dataUrl });
+    return NextResponse.json({ base64: dataUrl });
   } catch (error: any) {
     console.error('Base64 Proxy error:', error.message);
     return NextResponse.json({ error: 'Failed to convert image to base64' }, { status: 500 });

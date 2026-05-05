@@ -7,7 +7,7 @@ const openai = new OpenAI({
 export const aiService = {
   async analyzeImage(base64Image: string) {
     const response = await openai.chat.completions.create({
-      model: "gpt-5.5",
+      model: "gpt-4o",
       messages: [
         {
           role: "user",
