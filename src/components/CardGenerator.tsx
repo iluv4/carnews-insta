@@ -112,33 +112,66 @@ export default function CardGenerator() {
     if (!imgToAnalyze) return;
 
     setAnalyzing(true);
+    setProgress(0);
     setStatusText('이미지 최적화 중...');
     
+    // Simulated progress bar logic
+    const progressInterval = setInterval(() => {
+      setProgress(prev => (prev < 90 ? prev + Math.random() * 5 : prev));
+    }, 400);
+
+    const statusRotation = [
+      '🧬 이미지 데이터 구조화 중...',
+      '🎨 브랜드 에스테틱 동기화 중...',
+      '📐 전문가용 레이아웃 패턴 학습 중...',
+      '✒️ 프리미엄 타이포그래피 분석 중...',
+      '✨ 디자인 완성도 정밀 검증 중...'
+    ];
+    let statusIdx = 0;
+    const statusInterval = setInterval(() => {
+      setStatusText(statusRotation[statusIdx % statusRotation.length]);
+      statusIdx++;
+    }, 1500);
+    
     try {
-      // 1. Fetch image via proxy and compress it to Base64
+      // 1. Fetch image via proxy and compress it to Base64 (with retry)
       const compressedImage = await new Promise<string>((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.src = `/api/proxy?url=${encodeURIComponent(imgToAnalyze)}`;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 800; 
-          let width = img.width;
-          let height = img.height;
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        const tryLoad = (useProxy: boolean) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.src = useProxy 
+            ? `/api/proxy?url=${encodeURIComponent(imgToAnalyze)}`
+            : imgToAnalyze; // Try direct if proxy fails
+            
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800; 
+            let width = img.width;
+            let height = img.height;
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+          };
+          
+          img.onerror = () => {
+            if (useProxy) {
+              console.warn('Proxy load failed, trying direct...');
+              tryLoad(false); // Try direct as fallback
+            } else {
+              reject(new Error('이미지 로드에 최종 실패했습니다. 다른 링크를 시도해 주세요.'));
+            }
+          };
         };
-        img.onerror = () => reject(new Error('이미지를 불러오는데 실패했습니다.'));
+
+        tryLoad(true); // Start with proxy
       });
 
-      setStatusText('AI가 디자인 DNA 분석 중...');
       const analyzeRes = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -147,10 +180,15 @@ export default function CardGenerator() {
       const data = await analyzeRes.json();
       if (!analyzeRes.ok) throw new Error(data.error);
       
+      clearInterval(progressInterval);
+      clearInterval(statusInterval);
+      setProgress(100);
       setJsonlData(data.analysis);
       setStatusText('스타일 학습 완료!');
       return data.analysis;
     } catch (error: any) {
+      clearInterval(progressInterval);
+      clearInterval(statusInterval);
       console.error(error);
       setStatusText(`Error: ${error.message}`);
     } finally {
@@ -239,24 +277,42 @@ export default function CardGenerator() {
         ) : (
           <>
             {currentStep === 0 && (
-              <div className={styles.view}>
-                <h2 className={styles.sectionTitle}>인스타그램 스타일 학습</h2>
-                <div className={styles.urlInputGroup}>
-                  <input 
-                    type="text" 
-                    value={instagramUrl} 
-                    onChange={(e) => setInstagramUrl(e.target.value)}
-                    placeholder="인스타그램 포스트 URL 입력"
-                    className={styles.urlInput}
-                  />
-                  <button className="btn-primary" onClick={() => handleFetchImages()}>이미지 추출</button>
+              <div className={styles.wizardCard}>
+                <div className={styles.sectionHeader}>
+                  <h2 className={styles.sectionTitle}>인스타그램 스타일 학습</h2>
+                  <p className={styles.sectionDesc}>분석하고 싶은 포스트 URL을 입력하세요. AI가 디자인 에스테틱을 추출합니다.</p>
+                </div>
+
+                <div className={styles.urlInputContainer}>
+                  <div className={styles.inputWrapper}>
+                    <span className={styles.inputIcon}>🔗</span>
+                    <input 
+                      type="text" 
+                      value={instagramUrl} 
+                      onChange={(e) => setInstagramUrl(e.target.value)}
+                      placeholder="https://www.instagram.com/p/..."
+                      className={styles.modernInput}
+                    />
+                  </div>
+                  <button className={styles.modernBtn} onClick={() => handleFetchImages()}>
+                    {loading ? '추출 중...' : '이미지 분석 시작'}
+                  </button>
                 </div>
                 
                 <div className={styles.quickTests}>
                   <p className={styles.quickLabel}>업종별 빠른 테스트:</p>
-                  <div className={styles.chipGroup}>
+                  <div className={styles.chipGrid}>
                     {industryExamples.map(ex => (
-                      <button key={ex.name} className={styles.chip} onClick={() => handleOneClickAnalyze(ex.url)}>
+                      <button key={ex.name} className={styles.modernChip} onClick={() => handleOneClickAnalyze(ex.url)}>
+                        <span className={styles.chipIcon}>
+                          {ex.name.includes('부암동') ? '🍲' : 
+                           ex.name.includes('병원') ? '🏥' : 
+                           ex.name.includes('보험') ? '🛡️' : 
+                           ex.name.includes('화장품') ? '💄' : 
+                           ex.name.includes('식당') ? '🍕' : 
+                           ex.name.includes('커피') ? '☕' : 
+                           ex.name.includes('무신사') ? '👕' : '🖱️'}
+                        </span>
                         {ex.name}
                       </button>
                     ))}
@@ -290,7 +346,15 @@ export default function CardGenerator() {
                   <label className="label">적용된 스타일</label>
                   <div className={`${styles.styleBadge} ${analyzing ? styles.pulse : ''}`}>
                     {analyzing ? (
-                      <span className={styles.analyzingText}>🧬 AI가 디자인 DNA 분석 중...</span>
+                      <div className={styles.analysisProgressWrapper}>
+                        <div className={styles.progressTextGroup}>
+                          <span className={styles.analyzingText}>{statusText}</span>
+                          <span className={styles.progressPercent}>{Math.round(progress)}%</span>
+                        </div>
+                        <div className={styles.miniProgressBar}>
+                          <div className={styles.miniProgressFill} style={{ width: `${progress}%` }}></div>
+                        </div>
+                      </div>
                     ) : jsonlData ? (
                       '✨ 커스텀 디자인 DNA (학습됨)'
                     ) : (
