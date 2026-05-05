@@ -1,0 +1,30 @@
+[
+  {
+    "id": "ux_trend_2026",
+    "name": "2026 UX Trend",
+    "description": "Modern, futuristic 3D design with neon accents.",
+    "tags": ["Tech", "Future", "Design", "Report"],
+    "file": "ux_trend_2026.jsonl"
+  },
+  {
+    "id": "marketing_crew",
+    "name": "Marketing Crew",
+    "description": "Vibrant purple gradients, high energy recruitment style.",
+    "tags": ["Marketing", "Event", "Recruitment", "Social"],
+    "file": "marketing_crew.jsonl"
+  },
+  {
+    "id": "magazine_news",
+    "name": "Magazine News",
+    "description": "Clean, photo-centric professional magazine layout.",
+    "tags": ["Lifestyle", "Travel", "Professional", "Photography"],
+    "file": "magazine_news.jsonl"
+  },
+  {
+    "id": "english_news_gpt",
+    "name": "Educational English",
+    "description": "Educational focused with emphasis on keywords.",
+    "tags": ["Education", "Language", "Learning", "Tips"],
+    "file": "english_news_gpt.jsonl"
+  }
+]

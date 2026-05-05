@@ -1,339 +1,302 @@
 .dashboard {
   display: flex;
-  height: calc(100vh - 160px);
-  gap: 32px;
-  animation: fadeIn 0.5s ease-out;
+  height: calc(100vh - 40px);
+  background: var(--background);
 }
 
-/* Sidebar Styling */
-.sidebar {
-  width: 320px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: var(--radius-lg);
-  padding: 24px;
-}
-
-.sidebarHeader h3 {
-  font-size: 1.1rem;
-  font-weight: 800;
-  margin-bottom: 4px;
-}
-
-.sidebarHeader p {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.templateGrid {
-  flex: 1;
-  overflow-y: auto;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  padding-right: 8px;
-}
-
-.emptyState {
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  margin-top: 40px;
-}
-
-/* Main Content Styling */
 .content {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 24px;
-  min-width: 0; /* Important for flex child with overflow */
+  min-width: 0;
+  padding: 0 40px 40px 40px;
 }
 
 .contentHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--surface-border);
 }
 
-.tabs {
+/* Stepper Styles */
+.stepper {
   display: flex;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 4px;
-  border-radius: 12px;
+  gap: 32px;
+  align-items: center;
 }
 
-.tab {
-  padding: 8px 24px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-weight: 600;
+.stepItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font-weight: 700;
   font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
 }
 
-.activeTab {
-  background: var(--surface);
+.stepDot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  border: 1px solid var(--surface-border);
+}
+
+.activeStep {
+  color: var(--primary);
+}
+
+.activeStep .stepDot {
+  background: var(--primary);
   color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-glow);
+}
+
+.completedStep {
+  color: var(--text-primary);
+}
+
+.completedStep .stepDot {
+  background: var(--success);
+  color: white;
+  border-color: var(--success);
 }
 
 .badge {
-  background: rgba(99, 102, 241, 0.1);
+  background: #EEF2FF;
   color: var(--primary);
-  padding: 6px 16px;
+  padding: 8px 16px;
   border-radius: 100px;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 700;
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  border: 1px solid #C7D2FE;
 }
 
 .scrollArea {
   flex: 1;
   overflow-y: auto;
-  padding-right: 8px;
+  padding-top: 32px;
 }
 
-/* Sections */
-.section {
-  padding: 32px;
+/* Views */
+.wizardCard {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 48px;
+  animation: slideUp 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.libraryView {
+  animation: fadeIn 0.6s ease-out;
+}
+
+.hero {
+  background: linear-gradient(135deg, var(--primary) 0%, #312e81 100%);
+  border-radius: var(--radius-xl);
+  padding: 64px;
+  margin-bottom: 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+  box-shadow: var(--shadow-lg);
+}
+
+.heroContent {
+  max-width: 500px;
+}
+
+.heroTitle {
+  font-size: 2.5rem;
+  font-weight: 900;
+  margin-bottom: 16px;
+  letter-spacing: -0.04em;
+}
+
+.heroSubtitle {
+  font-size: 1.1rem;
+  opacity: 0.9;
+  margin-bottom: 32px;
+}
+
+.sectionHeader {
   margin-bottom: 24px;
 }
 
 .sectionTitle {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 800;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
 .sectionDesc {
   color: var(--text-secondary);
-  font-size: 0.9rem;
-  margin-bottom: 24px;
+  font-size: 1rem;
+  margin-bottom: 32px;
 }
 
-.searchForm {
-  display: flex;
-  gap: 12px;
-}
-
-.searchForm input {
-  flex: 1;
-}
-
-/* small image grid for results */
-.extractionResults {
-  margin-top: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.imageGridSmall {
+.templateGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 12px;
-}
-
-.gridItemSmall {
-  aspect-ratio: 1;
-  border-radius: 8px;
-  overflow: hidden;
-  cursor: pointer;
-  border: 2px solid transparent;
-  transition: all 0.2s;
-}
-
-.gridItemSmall img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.selectedItem {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-glow);
-}
-
-.saveBox {
-  display: flex;
-  gap: 12px;
-}
-
-.saveBox input {
-  flex: 1;
-}
-
-.details {
-  margin-top: 20px;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-}
-
-.jsonlView {
-  margin-top: 12px;
-  background: black;
-  padding: 16px;
-  border-radius: 8px;
-  overflow-x: auto;
-  font-family: monospace;
-}
-
-/* Generation View */
-.generateGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 32px;
-}
-
-.genForm {
-  padding: 32px;
-  display: flex;
-  flex-direction: column;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 24px;
 }
 
+/* Config & Learning */
 .formGroup {
+  margin-bottom: 24px;
+}
+
+.selectedStyle {
+  background: var(--surface-hover);
+  padding: 16px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  color: var(--primary);
+  border: 1px solid var(--surface-border);
+}
+
+.modelToggle {
   display: flex;
-  flex-direction: column;
+  gap: 8px;
+  background: var(--surface-hover);
+  padding: 4px;
+  border-radius: var(--radius-md);
+}
+
+.toggleBtn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.active {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Editor View */
+.editorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 32px;
+}
+
+.slideActions {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.pagination {
+  display: flex;
   gap: 8px;
 }
 
-.styleBadge {
-  background: var(--surface-hover);
-  padding: 8px 16px;
+.pageBtn {
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
-  font-size: 0.85rem;
-  color: var(--primary);
-  font-weight: 600;
-  border: 1px dashed var(--surface-border);
+  border: 1px solid var(--surface-border);
+  background: var(--surface);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.bigBtn {
-  height: 60px;
-  font-size: 1.1rem;
-}
-
-/* Preview Area */
-.previewArea {
-  padding: 32px;
-  display: flex;
-  flex-direction: column;
+.activePage {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
 }
 
 .canvasContainer {
-  flex: 1;
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: var(--radius-md);
+  background: #f1f5f9;
+  border-radius: var(--radius-2xl);
+  min-height: 600px;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 500px;
   border: 1px dashed var(--surface-border);
-  position: relative;
-  overflow: hidden;
+  padding: 40px;
 }
 
-.previewWrapper {
-  position: relative;
-  width: 100%;
-  max-width: 380px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
-  border-radius: 12px;
-  overflow: hidden;
-  animation: fadeIn 0.6s ease-out;
-}
-
-.finalImage {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
-.textOverlay {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 90%;
+.loadingPlaceholder {
   text-align: center;
-  font-weight: 800;
-  font-size: 2.2rem;
-  text-shadow: 2px 4px 12px rgba(0, 0, 0, 0.9);
-  pointer-events: none;
-  line-height: 1.2;
-}
-
-.overlayEditor {
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid var(--surface-border);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.colorRow {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.colorPicker {
-  height: 40px;
-  width: 60px;
-  border: none;
-  background: none;
-  cursor: pointer;
-}
-
-.previewPlaceholder {
-  text-align: center;
-  color: var(--text-muted);
 }
 
 .pulseIcon {
   font-size: 4rem;
-  margin-bottom: 16px;
-  opacity: 0.3;
+  margin-bottom: 24px;
   animation: pulse 2s infinite;
 }
 
+.successMessage {
+  text-align: center;
+  padding: 40px;
+  animation: fadeIn 0.6s ease-out;
+}
+
+.checkIcon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+
+.toast {
+  position: fixed;
+  bottom: 40px;
+  right: 40px;
+  background: var(--text-primary);
+  color: white;
+  padding: 16px 32px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  font-weight: 700;
+  animation: slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Skeleton Animation */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #f8fafc 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s infinite;
+  border-radius: var(--radius-md);
+}
+
+@keyframes skeletonLoading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 @keyframes pulse {
-  0% { transform: scale(1); opacity: 0.3; }
-  50% { transform: scale(1.1); opacity: 0.5; }
-  100% { transform: scale(1); opacity: 0.3; }
+  0% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 0.5; }
 }
 
-.loader {
-  width: 24px;
-  height: 24px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: white;
-  animation: spin 1s linear infinite;
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-@media (max-width: 1024px) {
-  .dashboard {
-    flex-direction: column;
-    height: auto;
-  }
-  .sidebar {
-    width: 100%;
-  }
-  .generateGrid {
-    grid-template-columns: 1fr;
-  }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
 }

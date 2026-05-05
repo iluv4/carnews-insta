@@ -17,13 +17,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
       <body className={inter.className}>
         <Providers>
-          <Navbar />
-          <main className="main-content">
-            {children}
-          </main>
+          {children}
         </Providers>
       </body>
     </html>

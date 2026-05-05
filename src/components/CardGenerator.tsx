@@ -3,7 +3,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './CardGenerator.module.css';
 import TemplateCard from './TemplateCard';
+import dynamic from 'next/dynamic';
+
+const CanvasEditor = dynamic(() => import('./CanvasEditor'), { 
+  ssr: false,
+  loading: () => <div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>에디터 로딩 중...</div>
+});
 import { useSession, signIn } from 'next-auth/react';
+import { useTab } from '@/context/TabContext';
 
 interface Template {
   id: string;
@@ -15,9 +22,9 @@ interface Template {
 
 export default function CardGenerator() {
   const { data: session } = useSession();
+  const { activeTab, setActiveTab } = useTab();
   
   // UI States
-  const [activeTab, setActiveTab] = useState<'library' | 'generate'>('library');
   const [statusText, setStatusText] = useState('');
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -28,7 +35,8 @@ export default function CardGenerator() {
   const [extractedImages, setExtractedImages] = useState<string[]>([]);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
   const [jsonlData, setJsonlData] = useState('');
-  const [resultImage, setResultImage] = useState('');
+  const [resultImages, setResultImages] = useState<string[]>([]);
+  const [currentSlide, setCurrentSlide] = useState(0);
   
   // Template Library
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -37,10 +45,7 @@ export default function CardGenerator() {
 
   // Generation Settings
   const [theme, setTheme] = useState('');
-  const [overlayText, setOverlayText] = useState('');
-  const [overlayColor, setOverlayColor] = useState('#ffffff');
-  
-  const imgRef = useRef<HTMLImageElement>(null);
+  const [generationMode, setGenerationMode] = useState<'creative' | 'strict'>('creative');
 
   useEffect(() => {
     fetchTemplates();
@@ -63,7 +68,8 @@ export default function CardGenerator() {
     setLoading(true);
     setStatusText('인스타그램 미디어 추출 중...');
     setExtractedImages([]);
-    setResultImage('');
+    setResultImages([]);
+    setCurrentSlide(0);
     
     try {
       const igRes = await fetch('/api/instagram', {
@@ -145,6 +151,48 @@ export default function CardGenerator() {
     }
   };
 
+  const findBestTemplate = async (themeInput: string) => {
+    if (!themeInput || templates.length === 0) return null;
+    
+    try {
+      const res = await fetch('/api/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: themeInput, templates: templates.map(t => ({ id: t.id, name: t.name })) })
+      });
+      const data = await res.json();
+      
+      if (data.templateId) {
+        return templates.find(t => t.id === data.templateId) || templates[0];
+      }
+    } catch (err) {
+      console.error("Template matching failed:", err);
+    }
+    
+    // Fallback to first template if matching fails
+    return templates[0];
+  };
+
+  const handleQuickStart = async () => {
+    if (!theme) {
+      setStatusText('먼저 테마를 입력해주세요!');
+      return;
+    }
+
+    setStatusText('AI가 최적의 템플릿을 찾는 중...');
+    const bestTemplate = await findBestTemplate(theme);
+    
+    if (bestTemplate) {
+      selectTemplate(bestTemplate);
+      // Wait a bit for state update
+      setTimeout(() => {
+        handleGenerate();
+      }, 500);
+    } else {
+      setStatusText('적절한 템플릿을 찾을 수 없습니다.');
+    }
+  };
+
   const handleSaveTemplate = async () => {
     if (!jsonlData || !newTemplateName) return;
     if (!session) {
@@ -180,17 +228,27 @@ export default function CardGenerator() {
     setStatusText('학습된 스타일 기반 이미지 생성 중...');
     
     try {
-      const aiRes = await fetch('/api/transform', {
+      const endpoint = generationMode === 'strict' ? '/api/transform/controlnet' : '/api/transform';
+      const referenceImageUrl = selectedTemplateId 
+        ? templates.find(t => t.id === selectedTemplateId)?.thumbnail 
+        : extractedImages[selectedImageIndex];
+
+      const aiRes = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jsonlAnalysis: jsonlData, theme })
+        body: JSON.stringify({ 
+          jsonlAnalysis: jsonlData, 
+          theme,
+          initImageUrl: generationMode === 'strict' ? referenceImageUrl : undefined
+        })
       });
       const aiData = await aiRes.json();
 
       if (!aiRes.ok) throw new Error(aiData.error || 'Failed to transform image');
 
-      setResultImage(aiData.transformedUrl);
-      setStatusText('카드뉴스 배경 생성 완료!');
+      setResultImages(aiData.transformedUrls);
+      setCurrentSlide(0);
+      setStatusText('다중 카드뉴스 배경 생성 완료!');
 
     } catch (error: any) {
       console.error(error);
@@ -200,227 +258,312 @@ export default function CardGenerator() {
     }
   };
 
+  const themeInputRef = useRef<HTMLTextAreaElement>(null);
+
   const selectTemplate = (template: Template) => {
     setJsonlData(template.content);
     setSelectedTemplateId(template.id);
-    setStatusText(`'${template.name}' 스타일이 로드되었습니다.`);
+    setStatusText(`'${template.name}' 스타일이 선택되었습니다. 주제를 입력하세요.`);
     setActiveTab('generate');
+    
+    // Smooth scroll and focus after tab transition
+    setTimeout(() => {
+      themeInputRef.current?.focus();
+      themeInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
   };
 
-  const downloadWithText = async () => {
-    if (!resultImage || !imgRef.current) return;
-    try {
-      setStatusText('이미지 합성 중...');
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.src = '/api/proxy?url=' + encodeURIComponent(resultImage);
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-      });
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-      if (overlayText) {
-        const fontSize = Math.floor(canvas.width * 0.08); 
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        ctx.fillStyle = overlayColor;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
-        ctx.shadowBlur = 10;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        const lines = overlayText.split('\n');
-        const lineHeight = fontSize * 1.2;
-        const totalHeight = lines.length * lineHeight;
-        let startY = (canvas.height - totalHeight) / 2 + (lineHeight / 2);
-        lines.forEach(line => {
-          ctx.fillText(line, canvas.width / 2, startY);
-          startY += lineHeight;
-        });
-      }
-      const blobUrl = canvas.toDataURL('image/png');
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `cardnews_generated.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setStatusText('다운로드 완료!');
-    } catch (err) {
-      console.error("Composite download failed:", err);
-    }
+
+
+  const [currentStep, setCurrentStep] = useState(0); // 0: Library, 1: Learning, 2: Config, 3: Editor
+
+  // Sync tab switching with wizard steps
+  useEffect(() => {
+    if (activeTab === 'library') setCurrentStep(0);
+    if (activeTab === 'generate') setCurrentStep(2);
+  }, [activeTab]);
+
+  const goToStep = (step: number) => {
+    setCurrentStep(step);
+    if (step === 0) setActiveTab('library');
+    if (step === 2) setActiveTab('generate');
   };
+
+  const handleSelectTemplateAndContinue = (template: any) => {
+    selectTemplate(template);
+    goToStep(2);
+    setTimeout(() => {
+      themeInputRef.current?.focus();
+    }, 100);
+  };
+
+  const renderStepIndicator = () => (
+    <div className={styles.stepper}>
+      {[
+        { id: 0, label: '스타일 선택' },
+        { id: 1, label: '스타일 학습' },
+        { id: 2, label: '내용 입력' },
+        { id: 3, label: '편집 및 저장' }
+      ].map((step) => (
+        <div 
+          key={step.id} 
+          className={`${styles.stepItem} ${currentStep === step.id ? styles.activeStep : ''} ${currentStep > step.id ? styles.completedStep : ''}`}
+        >
+          <div className={styles.stepDot}>{currentStep > step.id ? '✓' : step.id + 1}</div>
+          <span>{step.label}</span>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className={styles.dashboard}>
-      {/* Sidebar - Template Library */}
-      <aside className={styles.sidebar}>
-        <div className={styles.sidebarHeader}>
-          <h3>Template Library</h3>
-          <p>학습된 프리미엄 스타일</p>
-        </div>
-        <div className={styles.templateGrid}>
-          {templates.map((template) => (
-            <TemplateCard
-              key={template.id}
-              name={template.name}
-              thumbnail={template.thumbnail}
-              creatorName={template.user?.name}
-              creatorImage={template.user?.image}
-              onClick={() => selectTemplate(template)}
-              isSelected={selectedTemplateId === template.id}
-            />
-          ))}
-          {templates.length === 0 && (
-            <div className={styles.emptyState}>
-              등록된 템플릿이 없습니다.
-            </div>
-          )}
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
       <div className={styles.content}>
         <header className={styles.contentHeader}>
-          <div className={styles.tabs}>
-            <button 
-              className={`${styles.tab} ${activeTab === 'library' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('library')}
-            >
-              레퍼런스 학습
-            </button>
-            <button 
-              className={`${styles.tab} ${activeTab === 'generate' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('generate')}
-            >
-              카드뉴스 생성
-            </button>
+          {renderStepIndicator()}
+          <div className={styles.badge}>
+            PRO 플랜 사용 중
           </div>
-          {statusText && <div className={styles.badge}>{statusText}</div>}
         </header>
 
         <div className={styles.scrollArea}>
-          {activeTab === 'library' ? (
+          {currentStep === 0 && (
             <div className={styles.libraryView}>
-              <section className={`glass-panel ${styles.section}`}>
-                <h2 className={styles.sectionTitle}>1. 인스타그램 레퍼런스 분석</h2>
-                <p className={styles.sectionDesc}>분석할 인스타그램 URL을 입력하세요. GPT-5.5가 디자인 스타일을 학습합니다.</p>
+              <section className={styles.hero}>
+                <div className={styles.heroContent}>
+                  <h1 className={styles.heroTitle}>Premium AI 카드뉴스</h1>
+                  <p className={styles.heroSubtitle}>트렌드를 학습한 AI로 10초 만에 전문가급 콘텐츠를 만드세요.</p>
+                  <button className="btn-primary" onClick={() => goToStep(1)}>
+                    <span>🎨</span> 새로운 스타일 학습하기
+                  </button>
+                </div>
+                <div className={styles.heroStats}>
+                   <div className={styles.statItem}>
+                      <span className={styles.statValue}>1,200+</span>
+                      <span className={styles.statLabel}>생성 완료</span>
+                   </div>
+                </div>
+              </section>
+
+              <div className={styles.sectionHeader}>
+                <h2 className={styles.sectionTitle}>추천 템플릿 라이브러리</h2>
+                <p className={styles.sectionDesc}>마음에 드는 스타일을 선택하여 바로 제작을 시작하세요.</p>
+              </div>
+
+              {templates.length === 0 ? (
+                <div className={styles.templateGrid}>
+                  {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} className={`${styles.skeleton}`} style={{ height: '280px', borderRadius: 'var(--radius-lg)' }}></div>
+                  ))}
+                </div>
+              ) : (
+                <div className={styles.templateGrid}>
+                  {templates.map(template => (
+                    <TemplateCard 
+                      key={template.id}
+                      name={template.name}
+                      thumbnail={template.thumbnail}
+                      creatorName={template.user?.name}
+                      creatorImage={template.user?.image}
+                      isSelected={selectedTemplateId === template.id}
+                      onClick={() => handleSelectTemplateAndContinue(template)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {currentStep === 1 && (
+            <div className={styles.learningView}>
+              <div className={`glass-panel ${styles.wizardCard}`}>
+                <h2 className={styles.sectionTitle}>인스타그램 스타일 학습</h2>
+                <p className={styles.sectionDesc}>분석하고 싶은 포스트 URL을 입력하세요. AI가 디자인 에스테틱을 추출합니다.</p>
                 <form onSubmit={handleFetchImages} className={styles.searchForm}>
                   <input 
-                    type="url" 
+                    type="text" 
                     className="input-field" 
                     placeholder="https://www.instagram.com/p/..." 
                     value={instagramUrl}
                     onChange={(e) => setInstagramUrl(e.target.value)}
-                    required
                   />
                   <button type="submit" className="btn-primary" disabled={loading}>
-                    {loading ? <span className={styles.loader}></span> : '이미지 추출'}
+                    {loading ? <div className="loader"></div> : '이미지 분석'}
                   </button>
                 </form>
 
-                {extractedImages.length > 0 && (
+                {loading ? (
                   <div className={styles.extractionResults}>
                     <div className={styles.imageGridSmall}>
-                      {extractedImages.map((img, index) => (
+                      {[1, 2, 3, 4].map(i => (
+                        <div key={i} className={styles.skeleton} style={{ aspectRatio: '1', borderRadius: 'var(--radius-md)' }}></div>
+                      ))}
+                    </div>
+                  </div>
+                ) : extractedImages.length > 0 && (
+                  <div className={styles.extractionResults}>
+                    <h3 className={styles.label}>학습할 이미지 선택</h3>
+                    <div className={styles.imageGridSmall}>
+                      {extractedImages.map((img, idx) => (
                         <div 
-                          key={index} 
-                          className={`${styles.gridItemSmall} ${selectedImageIndex === index ? styles.selectedItem : ''}`}
-                          onClick={() => setSelectedImageIndex(index)}
+                          key={idx} 
+                          className={`${styles.gridItemSmall} ${selectedImageIndex === idx ? styles.selectedItem : ''}`}
+                          onClick={() => setSelectedImageIndex(idx)}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={`/api/proxy?url=${encodeURIComponent(img)}`} alt={`Ref ${index}`} />
+                          <img src={img} alt={`Extracted ${idx}`} />
                         </div>
                       ))}
                     </div>
-                    <button className={`btn-primary ${styles.actionBtn}`} onClick={handleAnalyze} disabled={analyzing}>
-                      {analyzing ? <span className={styles.loader}></span> : '이 스타일 학습하기 (Analyze)'}
-                    </button>
+                    <div style={{ marginTop: '32px', display: 'flex', gap: '12px' }}>
+                       <button className="btn-secondary" onClick={() => goToStep(0)}>뒤로가기</button>
+                       <button className="btn-primary" style={{ flex: 1 }} onClick={handleAnalyze} disabled={analyzing}>
+                          {analyzing ? <div className="loader"></div> : '디자인 에스테틱 추출 시작'}
+                       </button>
+                    </div>
                   </div>
                 )}
-              </section>
+                
+                {analyzing && (
+                  <div className={styles.successMessage}>
+                    <div className={styles.loader} style={{ width: '40px', height: '40px', borderTopColor: 'var(--primary)' }}></div>
+                    <h3 style={{ marginTop: '24px' }}>AI가 스타일을 분석 중입니다...</h3>
+                    <p>컬러 팔레트와 레이아웃 구조를 학습하고 있습니다.</p>
+                  </div>
+                )}
+                
+                {jsonlData && !analyzing && (
+                  <div className={styles.successMessage}>
+                    <div className={styles.checkIcon}>✨</div>
+                    <h3>스타일 분석 완료!</h3>
+                    <p>이제 이 디자인 스타일로 카드뉴스를 제작할 수 있습니다.</p>
+                    <button className="btn-primary" onClick={() => goToStep(2)}>제작 시작하기</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
-              {jsonlData && (
-                <section className={`glass-panel ${styles.section}`}>
-                  <h2 className={styles.sectionTitle}>2. 라이브러리에 저장</h2>
-                  <p className={styles.sectionDesc}>학습된 디자인 데이터를 영구 템플릿으로 저장합니다.</p>
-                  <div className={styles.saveBox}>
-                    <input 
-                      type="text" 
-                      className="input-field" 
-                      placeholder="스타일 이름 (예: 테크_모던_블루)" 
-                      value={newTemplateName}
-                      onChange={(e) => setNewTemplateName(e.target.value)}
-                    />
-                    <button className="btn-primary" onClick={handleSaveTemplate} disabled={!newTemplateName}>
-                      저장하기
+          {currentStep === 2 && (
+            <div className={styles.configView}>
+              <div className={`glass-panel ${styles.wizardCard}`}>
+                <h2 className={styles.sectionTitle}>카드뉴스 내용 입력</h2>
+                <p className={styles.sectionDesc}>제작하고 싶은 주제나 핵심 내용을 입력하세요.</p>
+                
+                <div className={styles.formGroup}>
+                  <label className="label">적용된 스타일</label>
+                  <div className={styles.selectedStyle}>
+                    {selectedTemplateId 
+                      ? templates.find(t => t.id === selectedTemplateId)?.name 
+                      : jsonlData ? '사용자 정의 스타일' : '선택된 스타일 없음'}
+                  </div>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label className="label">뉴스 주제 / 내용</label>
+                  <textarea 
+                    ref={themeInputRef}
+                    className="input-field" 
+                    rows={6} 
+                    placeholder="예: '2026 테크 트렌드 톱3' 또는 '아이폰 출시 소식'"
+                    value={theme}
+                    onChange={(e) => setTheme(e.target.value)}
+                  />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label className="label">AI 모델 최적화</label>
+                  <div className={styles.modelToggle}>
+                    <button 
+                      className={`${styles.toggleBtn} ${generationMode === 'creative' ? styles.active : ''}`}
+                      onClick={() => setGenerationMode('creative')}
+                    >
+                      창의적 (GPT-2)
+                    </button>
+                    <button 
+                      className={`${styles.toggleBtn} ${generationMode === 'strict' ? styles.active : ''}`}
+                      onClick={() => setGenerationMode('strict')}
+                    >
+                      구조 유지 (Strict)
                     </button>
                   </div>
-                  <details className={styles.details}>
-                    <summary>추출된 디자인 데이터 확인 (JSONL)</summary>
-                    <pre className={styles.jsonlView}>{jsonlData}</pre>
-                  </details>
-                </section>
-              )}
-            </div>
-          ) : (
-            <div className={styles.generateView}>
-              <div className={styles.generateGrid}>
-                {/* Generation Form */}
-                <section className={`glass-panel ${styles.genForm}`}>
-                  <h2 className={styles.sectionTitle}>디자인 설정</h2>
-                  <div className={styles.formGroup}>
-                    <label className="label">뉴스 테마 / 주제</label>
-                    <textarea 
-                      className="input-field" 
-                      placeholder="예: 최신 아이폰 출시 소식, 유럽 여행 꿀팁..." 
-                      value={theme}
-                      onChange={(e) => setTheme(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
-                  <div className={styles.formGroup}>
-                    <label className="label">현재 로드된 스타일</label>
-                    <div className={styles.styleBadge}>{selectedTemplateId ? '커스텀 템플릿 적용됨' : '직접 학습된 스타일 적용됨'}</div>
-                  </div>
-                  <button className={`btn-primary ${styles.bigBtn}`} onClick={handleGenerate} disabled={generating || !jsonlData}>
-                    {generating ? <span className={styles.loader}></span> : 'AI 카드뉴스 생성하기'}
-                  </button>
+                </div>
 
-                  {resultImage && (
-                    <div className={styles.overlayEditor}>
-                      <button onClick={downloadWithText} className={`btn-primary ${styles.bigBtn}`}>최종 이미지 다운로드</button>
+                <div style={{ marginTop: '32px', display: 'flex', gap: '12px' }}>
+                  <button className="btn-secondary" onClick={() => goToStep(0)}>스타일 변경</button>
+                  <button 
+                    className="btn-primary" 
+                    style={{ flex: 1 }} 
+                    onClick={async () => {
+                      await handleGenerate();
+                      goToStep(3);
+                    }} 
+                    disabled={generating || (!jsonlData && !selectedTemplateId)}
+                  >
+                    {generating ? <div className="loader"></div> : 'AI 카드뉴스 생성하기'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 3 && (
+            <div className={styles.editorView}>
+              <div className={styles.editorHeader}>
+                <div className={styles.editorInfo}>
+                  <h2 className={styles.sectionTitle}>최종 편집 및 다운로드</h2>
+                  <p className={styles.sectionDesc}>텍스트를 더블클릭하여 내용을 수정하고, 완성된 이미지를 저장하세요.</p>
+                </div>
+                <div className={styles.slideActions}>
+                  {resultImages.length > 0 && (
+                    <div className={styles.pagination}>
+                      {resultImages.map((_, idx) => (
+                        <button 
+                          key={idx}
+                          className={`${styles.pageBtn} ${currentSlide === idx ? styles.activePage : ''}`}
+                          onClick={() => setCurrentSlide(idx)}
+                        >
+                          {idx + 1}
+                        </button>
+                      ))}
                     </div>
                   )}
-                </section>
+                  <button className="btn-secondary" onClick={() => goToStep(2)}>새로 만들기</button>
+                </div>
+              </div>
 
-                {/* Preview Area */}
-                <section className={`glass-panel ${styles.previewArea}`}>
-                  <h2 className={styles.sectionTitle}>미리보기</h2>
-                  <div className={styles.canvasContainer}>
-                    {resultImage ? (
-                      <div className={styles.previewWrapper}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img ref={imgRef} src={`/api/proxy?url=${encodeURIComponent(resultImage)}`} alt="Generated" className={styles.finalImage} crossOrigin="anonymous" />
-                      </div>
-                    ) : (
-                      <div className={styles.previewPlaceholder}>
-                        <div className={styles.pulseIcon}>🎨</div>
-                        <p>AI가 텍스트까지 완벽하게 배치한 결과가 여기에 표시됩니다.</p>
-                      </div>
-                    )}
-                  </div>
-                </section>
+              <div className={styles.editorLayout}>
+                <div className={styles.canvasContainer}>
+                  {generating ? (
+                    <div className={styles.loadingPlaceholder}>
+                      <div className={styles.skeleton} style={{ width: '500px', height: '500px', borderRadius: 'var(--radius-xl)', marginBottom: '32px' }}></div>
+                      <h3 className={styles.sectionTitle}>AI가 첫 번째 슬라이드를 생성 중입니다...</h3>
+                      <p className={styles.sectionDesc}>디자인 에스테틱에 맞춰 이미지를 렌더링하고 있습니다.</p>
+                    </div>
+                  ) : resultImages.length > 0 ? (
+                    <CanvasEditor 
+                      key={currentSlide}
+                      imageUrl={resultImages[currentSlide]} 
+                      onDownloadComplete={() => setStatusText(`${currentSlide + 1}번 슬라이드 저장 완료!`)} 
+                    />
+                  ) : (
+                    <div className={styles.loadingPlaceholder}>
+                      <div className={styles.pulseIcon}>🎨</div>
+                      <p>AI가 이미지를 생성하고 있습니다...</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {statusText && (
+        <div className={styles.toast}>
+          {statusText}
+        </div>
+      )}
     </div>
   );
 }

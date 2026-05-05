@@ -25,13 +25,16 @@ export default function TemplateCard({ name, thumbnail, creatorName, creatorImag
           </div>
         )}
         {isSelected && <div className={styles.checkBadge}>✓</div>}
+        <button className={styles.useBtn}>이 스타일로 제작</button>
       </div>
       <div className={styles.info}>
         <h4 className={styles.name}>{name}</h4>
         {creatorName && (
           <div className={styles.creator}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={creatorImage} alt={creatorName} className={styles.creatorAvatar} />
+            {creatorImage && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={creatorImage} alt={creatorName} className={styles.creatorAvatar} />
+            )}
             <span>{creatorName}</span>
           </div>
         )}
