@@ -19,13 +19,39 @@ export async function getCachedAnalysis(key: string): Promise<string | undefined
   }
 }
 
+/** Retrieve structured LayoutAnalysisResult if available */
+export async function getCachedStructured(key: string): Promise<object | undefined> {
+  try {
+    const shortcode = extractShortcode(key);
+    const row = await prisma.analysisCache.findUnique({ where: { shortcode } });
+    return (row?.structuredJson as object) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function setCachedAnalysis(key: string, analysis: string, imageUrl?: string): Promise<void> {
   try {
     const shortcode = extractShortcode(key);
+    // Try to parse as structured JSON for the structuredJson field
+    let structuredJson: any = null;
+    try { structuredJson = JSON.parse(analysis); } catch {}
+
     await prisma.analysisCache.upsert({
       where: { shortcode },
-      update: { jsonlData: analysis, imageUrl: imageUrl ?? null, updatedAt: new Date() },
-      create: { shortcode, instagramUrl: normalise(key), jsonlData: analysis, imageUrl: imageUrl ?? null },
+      update: {
+        jsonlData: analysis,
+        imageUrl: imageUrl ?? null,
+        updatedAt: new Date(),
+        ...(structuredJson ? { structuredJson } : {}),
+      },
+      create: {
+        shortcode,
+        instagramUrl: normalise(key),
+        jsonlData: analysis,
+        imageUrl: imageUrl ?? null,
+        ...(structuredJson ? { structuredJson } : {}),
+      },
     });
   } catch (e) {
     console.error('[analysisCache] DB write failed:', e);
