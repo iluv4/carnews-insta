@@ -21,9 +21,9 @@ export async function POST(req: Request) {
 
     // Return cached result if available (saves API cost on repeated analysis)
     if (cacheKey) {
-      const cached = getCachedAnalysis(cacheKey);
+      const cached = await getCachedAnalysis(cacheKey);
       if (cached) {
-        console.log('[analyze] cache hit for', cacheKey);
+        console.log('[analyze] DB cache hit for', cacheKey);
         return NextResponse.json({ analysis: cached, cached: true });
       }
     }
@@ -91,8 +91,8 @@ Example lines:
     const analysis = visionResponse.choices[0].message.content;
 
     if (cacheKey && analysis) {
-      setCachedAnalysis(cacheKey, analysis);
-      console.log('[analyze] cached result for', cacheKey);
+      await setCachedAnalysis(cacheKey, analysis);
+      console.log('[analyze] saved to DB cache for', cacheKey);
     }
 
     return NextResponse.json({ analysis });
