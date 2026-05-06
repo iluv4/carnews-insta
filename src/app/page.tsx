@@ -221,11 +221,11 @@ export default function LandingPage() {
           </p>
           <div className={styles.galleryGrid}>
             {GALLERY.map((g) => (
-              <div key={g.src} className={styles.galleryItem}>
+              <Link key={g.src} href="/dashboard" className={styles.galleryItem}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={g.src} alt={g.label} className={styles.galleryImg} />
                 <span className={styles.galleryLabel}>{g.label}</span>
-              </div>
+              </Link>
             ))}
           </div>
           <div className={styles.galleryCta}>
