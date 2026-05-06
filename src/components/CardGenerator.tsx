@@ -51,6 +51,7 @@ const CLIENT_PORTALS: Record<string, {
   additionalReferenceUrls?: string[];
   clientContext?: string;
   slideCount?: number;
+  naverPlaceQuery?: string;   // 네이버 지도 사진 크롤링용 검색어
   placeholder: string;
 }> = {
   'portal-sosohan': {
@@ -108,6 +109,7 @@ Special코스: 120,000원
 소소함, 정갈함, 퓨전 한식, 부암동 감성, 코스 요리, 가정집 레스토랑
     `.trim(),
     slideCount: 6,
+    naverPlaceQuery: '소소한풍경 부암동',
     placeholder: '소소한풍경 카드뉴스에 담을 내용을 입력하세요...',
   },
   'portal-insurance': {
@@ -472,6 +474,36 @@ export default function CardGenerator() {
     }
   };
 
+  const handleNaverPhotos = async (query: string) => {
+    setLoading(true);
+    setStatusText('🗺️ 네이버 지도 사진 크롤링 중...');
+    try {
+      const res = await fetch('/api/naver-photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      const images: string[] = data.images || [];
+      if (images.length === 0) throw new Error('사진을 찾지 못했습니다.');
+
+      // base64 변환 후 referenceImages에 추가
+      const settled = await Promise.allSettled(images.slice(0, 9).map(imgUrlToBase64));
+      const b64s = settled
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+        .map(r => r.value);
+
+      setReferenceImages(prev => [...prev, ...b64s].slice(0, 12));
+      setStatusText(`✅ 네이버 지도 사진 ${b64s.length}장 추가됨`);
+    } catch (e: any) {
+      setStatusText(`오류: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDownloadOnly = async (url: string) => {
     setLoading(true);
     setStatusText('이미지 가져오는 중...');
@@ -639,7 +671,18 @@ export default function CardGenerator() {
                 disabled={loading}
                 title="최근 게시물 사진 다운로드"
               >
-                {loading ? '...' : '↓ 사진 다운로드'}
+                {loading ? '...' : '↓ 인스타 다운로드'}
+              </button>
+            )}
+            {CLIENT_PORTALS[activeTab].naverPlaceQuery && (
+              <button
+                className={styles.portalBannerDownload}
+                onClick={() => handleNaverPhotos(CLIENT_PORTALS[activeTab].naverPlaceQuery!)}
+                disabled={loading}
+                title="네이버 지도 사진 가져오기"
+                style={{ marginLeft: 6 }}
+              >
+                {loading ? '...' : '🗺️ 네이버 사진'}
               </button>
             )}
           </div>
