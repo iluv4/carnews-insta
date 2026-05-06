@@ -11,19 +11,27 @@ async function getBrowser() {
   const isDev = process.env.NODE_ENV === 'development';
 
   if (isDev) {
-    // 로컬: 시스템 Chrome 사용
+    const { existsSync } = await import('fs');
     const localChromePaths = [
+      process.env.CHROME_PATH,                                                          // 환경변수 우선
       'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
       'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
       '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
       '/usr/bin/google-chrome',
-    ];
+      '/usr/bin/chromium-browser',
+    ].filter(Boolean) as string[];
+
+    const executablePath = localChromePaths.find(p => existsSync(p));
+    if (!executablePath) {
+      throw new Error(
+        `Chrome을 찾을 수 없습니다. .env.local 에 CHROME_PATH=C:\\...\\chrome.exe 를 추가하거나 Chrome을 설치하세요.`
+      );
+    }
     return puppeteer.launch({
-      executablePath: localChromePaths.find(p => {
-        try { require('fs').accessSync(p); return true; } catch { return false; }
-      }) || localChromePaths[0],
+      executablePath,
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     });
   }
 

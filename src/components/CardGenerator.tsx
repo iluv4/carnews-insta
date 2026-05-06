@@ -199,37 +199,62 @@ export default function CardGenerator() {
     setJsonlData('');
     setCurrentStep(2);
 
-    // 1) 클라이언트 인스타 사진 + 추가 레퍼런스 포스트 → 내 사진으로 로드
-    const urlsToLoad = [
-      ...(portal.clientInstagramUrl ? [portal.clientInstagramUrl] : []),
-      ...(portal.additionalReferenceUrls ?? []),
-    ];
+    // 1) 프리셋 우선 로드 → 없으면 Instagram API fallback
+    const portalId = activeTab.replace('portal-', '');
+    const manifestUrl = `/presets/${portalId}/manifest.json`;
 
-    if (urlsToLoad.length > 0) {
-      Promise.all(
-        urlsToLoad.map(u =>
-          fetch('/api/instagram', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: u }),
-          })
-            .then(r => r.json())
-            .then((data): string[] => data.images ?? [])
-            .catch(() => [] as string[])
-        )
-      ).then(async (results) => {
-        const allImageUrls = results.flat();
-        if (allImageUrls.length === 0) return;
-        const settled = await Promise.allSettled(allImageUrls.slice(0, 9).map(imgUrlToBase64));
-        const b64s = settled
-          .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
-          .map(r => r.value);
-        if (b64s.length > 0) {
-          setReferenceImages(b64s);
-          setStatusText(`✅ ${portal.name} 사진 ${b64s.length}장 로드 완료`);
+    fetch(manifestUrl)
+      .then(r => r.ok ? r.json() : null)
+      .then(async (manifest) => {
+        if (manifest?.photos?.length > 0) {
+          // ✅ 프리셋 있음 → 즉시 로드 (API 호출 없음)
+          const settled = await Promise.allSettled(
+            manifest.photos.slice(0, 12).map((path: string) =>
+              imgUrlToBase64(path)
+            )
+          );
+          const b64s = settled
+            .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+            .map(r => r.value);
+          if (b64s.length > 0) {
+            setReferenceImages(b64s);
+            setStatusText(`✅ ${portal.name} 프리셋 ${b64s.length}장 로드됨`);
+            return;
+          }
         }
-      }).catch(console.error);
-    }
+
+        // ⚡ 프리셋 없음 → Instagram API fallback
+        const urlsToLoad = [
+          ...(portal.clientInstagramUrl ? [portal.clientInstagramUrl] : []),
+          ...(portal.additionalReferenceUrls ?? []),
+        ];
+        if (urlsToLoad.length === 0) return;
+
+        Promise.all(
+          urlsToLoad.map(u =>
+            fetch('/api/instagram', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: u }),
+            })
+              .then(r => r.json())
+              .then((data): string[] => data.images ?? [])
+              .catch(() => [] as string[])
+          )
+        ).then(async (results) => {
+          const allImageUrls = results.flat();
+          if (allImageUrls.length === 0) return;
+          const settled = await Promise.allSettled(allImageUrls.slice(0, 9).map(imgUrlToBase64));
+          const b64s = settled
+            .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+            .map(r => r.value);
+          if (b64s.length > 0) {
+            setReferenceImages(b64s);
+            setStatusText(`✅ ${portal.name} 사진 ${b64s.length}장 로드 완료`);
+          }
+        });
+      })
+      .catch(console.error);
 
     // 2) 스타일 레퍼런스 분석 (캐시 우선)
     if (portal.styleReferenceUrl) {

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "presets:download": "node scripts/download-presets.mjs"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",
