@@ -51,8 +51,13 @@ export async function GET() {
           localTemplates = indexData.map((t: any) => ({
             id: `local-${t.id}`,
             name: t.name,
-            content: fs.readFileSync(path.join(localTemplatesDir, t.file), 'utf8'),
-            thumbnail: `/templates/${t.id}.png`,
+            content: fs.existsSync(path.join(localTemplatesDir, t.file))
+              ? fs.readFileSync(path.join(localTemplatesDir, t.file), 'utf8')
+              : '',
+            thumbnail: t.thumbnail || `/templates/${t.id}.png`,
+            category: t.category || null,
+            source: t.source || null,
+            tags: t.tags || [],
             isPublic: true,
             user: { name: 'System', image: '' }
           }));

@@ -11,7 +11,7 @@ const openai = new OpenAI({
 export async function POST(req: Request) {
   try {
     const { jsonlAnalysis, theme, reference, referenceImageBase64, jobId, clientContext } = await req.json();
-    if (jobId) createJob(jobId, 3, theme || '');
+    if (jobId) createJob(jobId, 1, theme || '');
 
     if (!jsonlAnalysis) {
       return NextResponse.json({ error: 'JSONL Analysis data is required' }, { status: 400 });
@@ -23,12 +23,10 @@ export async function POST(req: Request) {
       const encoder = new TextEncoder();
       const mockUrls = [
         'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=1000&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1000&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=1000&auto=format&fit=crop',
       ];
       const stream = new ReadableStream({
         async start(controller) {
-          for (let i = 0; i < 3; i++) {
+          for (let i = 0; i < 1; i++) {
             await new Promise(r => setTimeout(r, 800));
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ index: i, url: mockUrls[i] })}\n\n`));
           }
@@ -41,20 +39,23 @@ export async function POST(req: Request) {
       });
     }
 
-    // Compress analysis — keep under 1200 chars to reduce token overhead
-    const trimmedAnalysis = jsonlAnalysis.substring(0, 1200);
+    const trimmedAnalysis = jsonlAnalysis.substring(0, 4000);
 
     const clientContextBlock = clientContext
-      ? `CLIENT CONTEXT: ${clientContext}\n`
+      ? `\n[CLIENT INFO]\n${clientContext}\n`
       : '';
 
-    // Concise base prompt — verbose repetition removed
-    const styleInstructions = `Keep layout, typography, colors, overlays, spacing IDENTICAL to reference. Only change: ① food photo → "${theme}" ② background to match "${theme}" mood ③ text copy to Korean for "${theme}". ${clientContextBlock}DNA: ${trimmedAnalysis}`;
+    const styleInstructions = `
+[DESIGN RULES — FOLLOW EXACTLY]
+Replicate every visual detail from the DNA: exact colors, font weights, layout grid, spacing, overlays, border-radius, shadows.
+Only substitute: ① main subject/photo → "${theme}" ② background mood → "${theme}" atmosphere ③ all text → Korean for "${theme}".
+NO creative deviation from the reference style. Pixel-perfect style replication is the goal.
+${clientContextBlock}
+[DESIGN DNA]
+${trimmedAnalysis}`.trim();
 
     const slidePrompts = [
-      `COVER slide: hero image of "${theme}", bold Korean title. ${styleInstructions}`,
-      `CONTENT slide: detail/feature shot of "${theme}", Korean body text with key points. ${styleInstructions}`,
-      `CLOSING CTA slide: atmospheric "${theme}" shot, Korean closing headline + CTA. ${styleInstructions}`,
+      `COVER: Powerful hero shot of "${theme}". Bold Korean headline that stops the scroll. Include key message and call-to-action. ${styleInstructions}`,
     ];
 
     async function generateSlide(slidePrompt: string): Promise<string> {
@@ -70,8 +71,8 @@ export async function POST(req: Request) {
           image: imageFile,
           prompt: slidePrompt.substring(0, 32000),
           n: 1,
-          size: '1024x1024',
-          quality: 'low',
+          size: '1024x1536',
+          quality: 'high',
         });
 
         const item = res.data?.[0] as any;
@@ -84,8 +85,8 @@ export async function POST(req: Request) {
         model: 'gpt-image-2',
         prompt: slidePrompt.substring(0, 32000),
         n: 1,
-        size: '1024x1024',
-        quality: 'low',
+        size: '1024x1536',
+        quality: 'high',
       } as any);
 
       const item = res.data?.[0] as any;

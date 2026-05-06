@@ -13,8 +13,23 @@ interface Template {
   name: string;
   content: string;
   thumbnail?: string;
+  source?: string;
+  category?: string;
+  tags?: string[];
   user?: { name: string; image: string };
 }
+
+const TEMPLATE_CATEGORIES = [
+  { id: 'all',        label: '전체' },
+  { id: '사진관/스튜디오', label: '📸 사진관' },
+  { id: '보험/금융',    label: '🛡️ 보험/금융' },
+  { id: '뷰티/코스메틱', label: '💄 뷰티' },
+  { id: '음식점/카페',   label: '🍽️ 음식점' },
+  { id: '교육/정보',    label: '📚 교육' },
+  { id: '패션/라이프스타일', label: '👗 패션' },
+  { id: 'SNS/마케팅',   label: '📱 마케팅' },
+  { id: '기타',        label: '🗂️ 기타' },
+];
 
 const SOSOHAN_URL = 'https://www.instagram.com/sosohanpoonggyeong/';
 
@@ -119,6 +134,7 @@ export default function CardGenerator() {
   const [generationMode, setGenerationMode] = useState<'creative' | 'strict'>('creative');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [templateCategory, setTemplateCategory] = useState<string>('all');
   const [newTemplateName, setNewTemplateName] = useState('');
   const [progress, setProgress] = useState(0);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
@@ -261,14 +277,7 @@ export default function CardGenerator() {
 
       setExtractedImages(data.images);
       setSelectedImageIndex(0);
-      setStatusText(`${data.images.length}장 추출 완료! 다운로드 중...`);
-
-      // Auto-download ALL images from the post
-      data.images.forEach((imgUrl: string, i: number) => {
-        setTimeout(() => autoDownload(imgUrl, `reference-${i + 1}.jpg`), i * 300);
-      });
-
-      setStatusText(`${data.images.length}장 다운로드 완료!`);
+      setStatusText(`${data.images.length}장 추출 완료!`);
       return data.images;
     } catch (error: any) {
       setStatusText(`Error: ${error.message}`);
@@ -443,17 +452,27 @@ export default function CardGenerator() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       const images: string[] = data.images || [];
-      setStatusText(`${images.length}장 다운로드 중...`);
-      images.forEach((imgUrl, i) => {
-        setTimeout(() => autoDownload(imgUrl, `sosohan-${i + 1}.jpg`), i * 300);
-      });
-      setStatusText(`✅ ${images.length}장 다운로드 완료!`);
+      setStatusText(`✅ ${images.length}장 로드 완료!`);
     } catch (e: any) {
       setStatusText(`오류: ${e.message}`);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleSelectTemplate = (tpl: Template) => {
+    setSelectedTemplateId(tpl.id);
+    if (tpl.content) {
+      setJsonlData(tpl.content);
+      setStatusText(`✨ "${tpl.name}" 스타일 적용됨`);
+    }
+    if (tpl.source) setInstagramUrl(tpl.source);
+    setCurrentStep(2);
+  };
+
+  const filteredTemplates = templateCategory === 'all'
+    ? templates
+    : templates.filter(t => t.category === templateCategory || (!t.category && templateCategory === '기타'));
 
   const handleGenerate = async () => {
     if (!jsonlData && !selectedTemplateId) return;
@@ -506,9 +525,7 @@ export default function CardGenerator() {
               next[event.index] = event.url;
               return next;
             });
-            setProgress(((event.index + 1) / 3) * 100);
-            // Auto-download as each slide arrives
-            autoDownload(event.url, `cardnews-${labels[event.index]}.png`);
+            setProgress(((event.index + 1) / 1) * 100);
           }
         }
       }
@@ -647,6 +664,73 @@ export default function CardGenerator() {
                     })}
                   </div>
                 </div>
+
+                {/* ── 저장 레퍼런스 라이브러리 ── */}
+                {templates.length > 0 && (
+                  <div className={styles.templateLibrarySection}>
+                    <div className={styles.sectionHeader} style={{ marginBottom: 12 }}>
+                      <h3 className={styles.subTitle}>📌 저장 레퍼런스 라이브러리</h3>
+                      <p className={styles.sectionDesc} style={{ fontSize: '0.85rem' }}>
+                        인스타그램에서 저장한 레퍼런스를 스타일로 바로 적용하세요.
+                      </p>
+                    </div>
+
+                    {/* 업종 필터 */}
+                    <div className={styles.categoryFilterRow}>
+                      {TEMPLATE_CATEGORIES.map(cat => (
+                        <button
+                          key={cat.id}
+                          className={`${styles.categoryChip} ${templateCategory === cat.id ? styles.categoryChipActive : ''}`}
+                          onClick={() => setTemplateCategory(cat.id)}
+                        >
+                          {cat.label}
+                          <span className={styles.categoryCount}>
+                            {cat.id === 'all'
+                              ? templates.length
+                              : templates.filter(t => t.category === cat.id || (!t.category && cat.id === '기타')).length
+                            }
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* 템플릿 그리드 */}
+                    <div className={styles.templateGrid}>
+                      {filteredTemplates.map(tpl => (
+                        <div
+                          key={tpl.id}
+                          className={`${styles.templateItem} ${selectedTemplateId === tpl.id ? styles.templateItemSelected : ''}`}
+                          onClick={() => handleSelectTemplate(tpl)}
+                        >
+                          <div className={styles.templateThumbWrap}>
+                            {tpl.thumbnail ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={tpl.thumbnail.startsWith('/saved-refs') ? tpl.thumbnail : `/api/proxy?url=${encodeURIComponent(tpl.thumbnail)}`}
+                                alt={tpl.name}
+                                className={styles.templateThumb}
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className={styles.templateThumbPlaceholder}>{tpl.name[0]}</div>
+                            )}
+                            {selectedTemplateId === tpl.id && <div className={styles.templateCheckBadge}>✓</div>}
+                            {tpl.category && (
+                              <span className={styles.templateCategoryBadge}>{tpl.category}</span>
+                            )}
+                          </div>
+                          <p className={styles.templateName}>{tpl.name.replace('[저장] ', '')}</p>
+                        </div>
+                      ))}
+                      {filteredTemplates.length === 0 && (
+                        <p style={{ color: '#94a3b8', fontSize: '0.9rem', padding: '20px 0' }}>
+                          이 업종의 레퍼런스가 없습니다.
+                          <br />GPT 분석 후 자동으로 분류됩니다.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {extractedImages.length > 0 && (
                   <div className={styles.imageSelectorSection}>
