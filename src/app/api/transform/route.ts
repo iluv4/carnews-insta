@@ -41,21 +41,29 @@ export async function POST(req: Request) {
 
     const trimmedAnalysis = jsonlAnalysis.substring(0, 4000);
 
-    const clientContextBlock = clientContext
-      ? `\n[CLIENT INFO]\n${clientContext}\n`
+    // Extract brand mood only — never render operational details (address, phone, hours) as image text
+    const brandMoodBlock = clientContext
+      ? `\n[BRAND TONE — for mood/style reference only, DO NOT render as text in image]\n${
+          clientContext
+            .split('\n')
+            .filter(l => !/전화|영업시간|휴무|위치|주소|서울|02-|@|http|\d{2}:\d{2}/.test(l))
+            .join('\n')
+            .trim()
+        }\n`
       : '';
 
     const styleInstructions = `
 [DESIGN RULES — FOLLOW EXACTLY]
 Replicate every visual detail from the DNA: exact colors, font weights, layout grid, spacing, overlays, border-radius, shadows.
 Only substitute: ① main subject/photo → "${theme}" ② background mood → "${theme}" atmosphere ③ all text → Korean for "${theme}".
-NO creative deviation from the reference style. Pixel-perfect style replication is the goal.
-${clientContextBlock}
+CRITICAL: Render ONLY the headline message in the image. NO address, NO phone numbers, NO operating hours, NO URLs.
+Minimal text = maximum impact. 1–2 lines of bold Korean copy only.
+${brandMoodBlock}
 [DESIGN DNA]
 ${trimmedAnalysis}`.trim();
 
     const slidePrompts = [
-      `COVER: Powerful hero shot of "${theme}". Bold Korean headline that stops the scroll. Include key message and call-to-action. ${styleInstructions}`,
+      `COVER: Close-up hero shot of "${theme}". One bold Korean headline (max 2 lines) that stops the scroll. NO address, NO phone, NO hours — headline only. ${styleInstructions}`,
     ];
 
     async function generateSlide(slidePrompt: string): Promise<string> {
