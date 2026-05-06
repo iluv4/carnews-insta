@@ -79,7 +79,7 @@ ${trimmedAnalysis}`.trim();
           image: imageFile,
           prompt: slidePrompt.substring(0, 32000),
           n: 1,
-          size: '1024x1536',
+          size: '1024x1024',
           quality: 'high',
         });
 
