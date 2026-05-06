@@ -1072,6 +1072,29 @@
   margin-left: 4px;
 }
 
+.portalBannerDownload {
+  margin-left: auto;
+  padding: 5px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #6d28d9;
+  background: #ede9fe;
+  border: 1.5px solid #c4b5fd;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.portalBannerDownload:hover:not(:disabled) {
+  background: #6d28d9;
+  color: #fff;
+}
+
+.portalBannerDownload:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── Stepper clickable ── */
 .step {
   cursor: pointer;

@@ -25,11 +25,15 @@ function normaliseUrl(url: string): string {
 // 클라이언트 포털 설정
 // clientInstagramUrl: 해당 고객의 인스타 (내 사진 소스)
 // styleReferenceUrl: 레이아웃/디자인 DNA 학습용 레퍼런스
+// additionalReferenceUrls: 포털 로드 시 추가로 레퍼런스 이미지로 불러올 포스트 URL 목록
+// clientContext: AI 생성 프롬프트에 주입할 업체/메뉴 정보
 const CLIENT_PORTALS: Record<string, {
   name: string;
   icon: string;
   clientInstagramUrl: string;
   styleReferenceUrl: string;
+  additionalReferenceUrls?: string[];
+  clientContext?: string;
   placeholder: string;
 }> = {
   'portal-sosohan': {
@@ -37,6 +41,34 @@ const CLIENT_PORTALS: Record<string, {
     icon: '🍃',
     clientInstagramUrl: SOSOHAN_URL,
     styleReferenceUrl: 'https://www.instagram.com/p/DWiwH4cAbZP/',
+    additionalReferenceUrls: [
+      'https://www.instagram.com/p/DTCNeX0kqQR/',
+      'https://www.instagram.com/p/DWdnskCgYpj/',
+    ],
+    clientContext: `
+[업체 정보 - 소소한풍경]
+업종: 퓨전 한정식
+위치: 서울 종로구 자하문로40길 75 (부암동 239-13)
+전화: 02-395-5035
+영업시간: 11:30 ~ 22:00 (브레이크타임 15:30~17:00, 라스트오더 20:30)
+휴무: 매주 월요일
+분위기: 가정집 개조, 아늑한 정원 및 야외테라스, 개별룸 보유
+
+[코스 메뉴]
+- A코스: 28,000원
+- B코스: 42,000원
+- C코스: 58,000원
+- Special코스: 120,000원
+
+[인기 단품 메뉴]
+- 가지찜: 30,000원
+- 건두부쌈: 22,000원
+- 오징어먹물볶음밥: 16,000원
+- 오리엔탈 치킨
+
+[브랜드 키워드]
+소소함, 정갈함, 퓨전 한식, 계절 재료, 집밥 감성, 건강한 한 끼, 부암동 감성
+    `.trim(),
     placeholder: '소소한풍경 카드뉴스에 담을 내용을 입력하세요...',
   },
   'portal-insurance': {
@@ -123,27 +155,36 @@ export default function CardGenerator() {
     setJsonlData('');
     setCurrentStep(2);
 
-    // 1) 클라이언트 인스타 사진 → 내 사진으로 로드
-    if (portal.clientInstagramUrl) {
-      fetch('/api/instagram', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: portal.clientInstagramUrl }),
-      })
-        .then(r => r.json())
-        .then(async (data) => {
-          if (data.images?.length > 0) {
-            const settled = await Promise.allSettled(data.images.slice(0, 6).map(imgUrlToBase64));
-            const b64s = settled
-              .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
-              .map(r => r.value);
-            if (b64s.length > 0) {
-              setReferenceImages(b64s);
-              setStatusText(`✅ ${portal.name} 사진 ${b64s.length}장 로드 완료`);
-            }
-          }
-        })
-        .catch(console.error);
+    // 1) 클라이언트 인스타 사진 + 추가 레퍼런스 포스트 → 내 사진으로 로드
+    const urlsToLoad = [
+      ...(portal.clientInstagramUrl ? [portal.clientInstagramUrl] : []),
+      ...(portal.additionalReferenceUrls ?? []),
+    ];
+
+    if (urlsToLoad.length > 0) {
+      Promise.all(
+        urlsToLoad.map(u =>
+          fetch('/api/instagram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: u }),
+          })
+            .then(r => r.json())
+            .then((data): string[] => data.images ?? [])
+            .catch(() => [] as string[])
+        )
+      ).then(async (results) => {
+        const allImageUrls = results.flat();
+        if (allImageUrls.length === 0) return;
+        const settled = await Promise.allSettled(allImageUrls.slice(0, 9).map(imgUrlToBase64));
+        const b64s = settled
+          .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+          .map(r => r.value);
+        if (b64s.length > 0) {
+          setReferenceImages(b64s);
+          setStatusText(`✅ ${portal.name} 사진 ${b64s.length}장 로드 완료`);
+        }
+      }).catch(console.error);
     }
 
     // 2) 스타일 레퍼런스 분석 (캐시 우선)
@@ -418,7 +459,12 @@ export default function CardGenerator() {
     if (!jsonlData && !selectedTemplateId) return;
     setGenerating(true);
     setProgress(0);
+    // Show results page immediately with empty slots
+    setResultImages(['', '', '']);
+    setCurrentStep(3);
+
     try {
+      const activePortal = CLIENT_PORTALS[activeTab];
       const res = await fetch('/api/transform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -427,20 +473,52 @@ export default function CardGenerator() {
           theme,
           reference: generationMode,
           referenceImageBase64: referenceImages[0] || '',
-        })
+          clientContext: activePortal?.clientContext || '',
+        }),
       });
-      const data = await res.json();
-      if (data.transformedUrls) {
-        setResultImages(data.transformedUrls);
-        setCurrentStep(3);
-        // Auto-download all slides
-        const labels = ['cover', 'content', 'closing'];
-        data.transformedUrls.forEach((url: string, i: number) => {
-          setTimeout(() => autoDownload(url, `cardnews-${labels[i]}.png`), i * 400);
-        });
+
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({ error: '생성 실패' }));
+        throw new Error(err.error);
       }
-    } catch (err) { console.error(err); }
-    finally { setGenerating(false); }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      const labels = ['cover', 'content', 'closing'];
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE lines
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const event = JSON.parse(line.slice(6));
+          if (event.done) break;
+          if (typeof event.index === 'number' && event.url) {
+            setResultImages(prev => {
+              const next = [...prev];
+              next[event.index] = event.url;
+              return next;
+            });
+            setProgress(((event.index + 1) / 3) * 100);
+            // Auto-download as each slide arrives
+            autoDownload(event.url, `cardnews-${labels[event.index]}.png`);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      setStatusText(`오류: ${err.message}`);
+      setCurrentStep(2);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleAddReferenceImages = (files: FileList) => {
@@ -498,6 +576,16 @@ export default function CardGenerator() {
               ? <span className={styles.portalBannerSub}>사진 자동 로드 중...</span>
               : <span className={styles.portalBannerSub} style={{ color: '#f59e0b' }}>⚠️ 인스타 URL 미연동</span>
             }
+            {CLIENT_PORTALS[activeTab].clientInstagramUrl && (
+              <button
+                className={styles.portalBannerDownload}
+                onClick={() => handleDownloadOnly(CLIENT_PORTALS[activeTab].clientInstagramUrl)}
+                disabled={loading}
+                title="최근 게시물 사진 다운로드"
+              >
+                {loading ? '...' : '↓ 사진 다운로드'}
+              </button>
+            )}
           </div>
         )}
         <>
