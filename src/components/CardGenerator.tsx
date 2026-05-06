@@ -165,6 +165,8 @@ export default function CardGenerator() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [examplePreviews, setExamplePreviews] = useState<Record<string, string>>({});
   const [clientAnalysisCache, setClientAnalysisCache] = useState<Record<string, string>>({});
+  // 스타일 레퍼런스 포스트의 실제 카드뉴스 이미지 (images.edit 템플릿으로 사용)
+  const [styleTemplateBase64, setStyleTemplateBase64] = useState<string>('');
 
   const generatingStartRef = useRef<number>(0);
 
@@ -425,6 +427,12 @@ export default function CardGenerator() {
       const images = await handleFetchImages(url);
       if (images && images.length > 0) {
         setSelectedImageIndex(0);
+
+        // 스타일 레퍼런스 첫 번째 이미지를 레이아웃 템플릿으로 저장
+        imgUrlToBase64(images[0])
+          .then(b64 => setStyleTemplateBase64(b64))
+          .catch(() => {});
+
         const analysis = await handleAnalyze(images);
         if (analysis) {
           setStatusText('맞춤형 스타일 학습 완료! 내용을 입력하세요.');
@@ -515,6 +523,9 @@ export default function CardGenerator() {
           jsonlAnalysis: jsonlData || templates.find(t => t.id === selectedTemplateId)?.content,
           theme,
           reference: generationMode,
+          // styleTemplateBase64: 레이아웃 고정용 카드뉴스 템플릿 이미지
+          // referenceImageBase64: 콘텐츠 소스용 클라이언트 실제 사진
+          styleTemplateBase64: styleTemplateBase64 || referenceImages[0] || '',
           referenceImageBase64: referenceImages[0] || '',
           clientContext: activePortal?.clientContext || '',
           slideCount,
