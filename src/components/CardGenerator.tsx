@@ -479,7 +479,7 @@ export default function CardGenerator() {
     setGenerating(true);
     setProgress(0);
     // Show results page immediately with empty slots
-    setResultImages(['', '', '']);
+    setResultImages(['']);
     setCurrentStep(3);
 
     try {
@@ -863,7 +863,7 @@ export default function CardGenerator() {
                   <p className={styles.sectionDesc}>각 이미지를 클릭하면 확대해서 볼 수 있어요.</p>
                 </div>
                 <div className={styles.resultGrid}>
-                  {['COVER', 'CONTENT', 'CLOSING'].map((label, i) => (
+                  {['COVER'].map((label, i) => (
                     <div key={i} className={styles.resultCard}>
                       <span className={styles.resultLabel}>{label}</span>
                       {resultImages[i] ? (
