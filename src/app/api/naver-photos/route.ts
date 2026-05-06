@@ -1,110 +1,145 @@
 import { NextResponse } from 'next/server';
-import chromium from '@sparticuz/chromium-min';
-import puppeteer from 'puppeteer-core';
 
-export const maxDuration = 60;
+export const maxDuration = 30;
 
-const CHROMIUM_REMOTE_URL =
-  'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar';
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  'Accept': 'application/json, text/plain, */*',
+  'Accept-Language': 'ko-KR,ko;q=0.9',
+  'Referer': 'https://map.naver.com/',
+  'Origin': 'https://map.naver.com',
+};
 
-async function getBrowser() {
-  const isDev = process.env.NODE_ENV === 'development';
+// 1단계: 장소명으로 placeId 검색
+async function searchPlaceId(query: string): Promise<string | null> {
+  const url = `https://map.naver.com/v5/api/search?query=${encodeURIComponent(query)}&type=all&searchCoord=&boundary=`;
+  const res = await fetch(url, { headers: HEADERS });
+  if (!res.ok) throw new Error(`네이버 검색 실패: ${res.status}`);
 
-  if (isDev) {
-    const { existsSync } = await import('fs');
-    const localChromePaths = [
-      process.env.CHROME_PATH,                                                          // 환경변수 우선
-      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-      process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      '/usr/bin/google-chrome',
-      '/usr/bin/chromium-browser',
-    ].filter(Boolean) as string[];
+  const data = await res.json();
 
-    const executablePath = localChromePaths.find(p => existsSync(p));
-    if (!executablePath) {
-      throw new Error(
-        `Chrome을 찾을 수 없습니다. .env.local 에 CHROME_PATH=C:\\...\\chrome.exe 를 추가하거나 Chrome을 설치하세요.`
-      );
+  // place 결과에서 첫 번째 id 추출
+  const places =
+    data?.result?.place?.list ||
+    data?.result?.business?.list ||
+    [];
+
+  if (places.length === 0) return null;
+  return places[0].id || places[0].placeId || null;
+}
+
+// 2단계: placeId로 사진 목록 가져오기
+async function fetchPlacePhotos(placeId: string): Promise<string[]> {
+  const images: string[] = [];
+
+  // 방법 A: place summary API
+  try {
+    const summaryUrl = `https://place.map.naver.com/place/api/summary?businessId=${placeId}`;
+    const res = await fetch(summaryUrl, { headers: HEADERS });
+    if (res.ok) {
+      const data = await res.json();
+      const photos: any[] =
+        data?.photos ||
+        data?.result?.photos ||
+        data?.data?.photos ||
+        [];
+      photos.forEach((p: any) => {
+        const url = p.url || p.photoUrl || p.src;
+        if (url) images.push(url);
+      });
     }
-    return puppeteer.launch({
-      executablePath,
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    });
+  } catch {}
+
+  // 방법 B: 사진 전용 엔드포인트
+  if (images.length === 0) {
+    try {
+      const photoUrl = `https://place.map.naver.com/place/api/lv1/place/${placeId}/photos?page=1&size=30`;
+      const res = await fetch(photoUrl, { headers: HEADERS });
+      if (res.ok) {
+        const data = await res.json();
+        const list: any[] = data?.photos || data?.data || data?.result || [];
+        list.forEach((p: any) => {
+          const url = p.url || p.photoUrl || p.orgUrl;
+          if (url) images.push(url);
+        });
+      }
+    } catch {}
   }
 
-  // Vercel: @sparticuz/chromium 사용
-  return puppeteer.launch({
-    args: chromium.args,
-    defaultViewport: { width: 1280, height: 900 },
-    executablePath: await chromium.executablePath(CHROMIUM_REMOTE_URL),
-    headless: true,
-  });
+  // 방법 C: place lv1 전체 데이터에서 추출
+  if (images.length === 0) {
+    try {
+      const detailUrl = `https://place.map.naver.com/place/api/lv1/place/${placeId}`;
+      const res = await fetch(detailUrl, { headers: HEADERS });
+      if (res.ok) {
+        const data = await res.json();
+        const rawPhotos: any[] =
+          data?.photos ||
+          data?.result?.photos ||
+          data?.data?.photos ||
+          [];
+        rawPhotos.forEach((p: any) => {
+          const url = p.url || p.photoUrl || p.orgUrl;
+          if (url) images.push(url);
+        });
+
+        // 썸네일 fallback
+        if (images.length === 0) {
+          const thumb = data?.thumbnail || data?.result?.thumbnail;
+          if (thumb) images.push(thumb);
+        }
+      }
+    } catch {}
+  }
+
+  return [...new Set(images)]; // 중복 제거
+}
+
+// 3단계: 이미지 URL을 프록시 가능한 형태로 정제
+function cleanImageUrl(url: string): string {
+  // 네이버 사진 URL 고화질 파라미터로 변환
+  if (url.includes('pstatic.net') || url.includes('naver.net')) {
+    return url.replace(/\/\d+x\d+\//, '/').replace(/\?.*$/, '');
+  }
+  return url;
 }
 
 export async function POST(req: Request) {
-  const { query, placeId } = await req.json();
-
-  if (!query && !placeId) {
-    return NextResponse.json({ error: '장소명(query) 또는 placeId가 필요합니다.' }, { status: 400 });
-  }
-
-  let browser;
   try {
-    browser = await getBrowser();
-    const page = await browser.newPage();
+    const { query, placeId: directPlaceId } = await req.json();
 
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    );
-    await page.setExtraHTTPHeaders({ 'Accept-Language': 'ko-KR,ko;q=0.9' });
+    if (!query && !directPlaceId) {
+      return NextResponse.json({ error: '장소명(query) 또는 placeId가 필요합니다.' }, { status: 400 });
+    }
 
-    // 1) 검색 페이지 이동
-    const searchUrl = `https://map.naver.com/v5/search/${encodeURIComponent(query || '')}`;
-    await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    // placeId 확보
+    let placeId = directPlaceId;
+    if (!placeId) {
+      console.log(`[naver-photos] 검색: ${query}`);
+      placeId = await searchPlaceId(query);
+      if (!placeId) {
+        return NextResponse.json({ error: `"${query}" 검색 결과가 없습니다.` }, { status: 404 });
+      }
+      console.log(`[naver-photos] placeId: ${placeId}`);
+    }
 
-    // 2) 검색결과 iframe 진입
-    await page.waitForSelector('iframe#searchIframe', { timeout: 15000 });
-    const searchFrame = page.frames().find(f => f.name() === 'searchIframe') ||
-      (await page.$('iframe#searchIframe').then(el => el?.contentFrame()));
+    // 사진 가져오기
+    const rawImages = await fetchPlacePhotos(placeId);
+    const images = rawImages.map(cleanImageUrl).slice(0, 30);
 
-    if (!searchFrame) throw new Error('searchIframe을 찾을 수 없습니다.');
+    console.log(`[naver-photos] ${images.length}장 수집`);
 
-    // 3) 첫 번째 결과 클릭
-    await searchFrame.waitForSelector('li.UEzoS', { timeout: 10000 });
-    await searchFrame.click('li.UEzoS:first-child');
+    if (images.length === 0) {
+      return NextResponse.json({
+        error: '사진을 찾지 못했습니다. 네이버 플레이스 API 구조가 변경됐을 수 있습니다.',
+        placeId,
+        debug: { tried: ['summary', 'photos', 'lv1'] },
+      }, { status: 404 });
+    }
 
-    // 4) 상세 iframe 진입
-    await page.waitForSelector('iframe#entryIframe', { timeout: 15000 });
-    const entryFrame = page.frames().find(f => f.name() === 'entryIframe') ||
-      (await page.$('iframe#entryIframe').then(el => el?.contentFrame()));
-
-    if (!entryFrame) throw new Error('entryIframe을 찾을 수 없습니다.');
-
-    // 5) 사진 탭 클릭
-    await entryFrame.waitForSelector('a[href*="photo"], span.veBoZ', { timeout: 10000 });
-    const photoTab = await entryFrame.$('a[href*="photo"]') || await entryFrame.$('span.veBoZ');
-    if (photoTab) await photoTab.click();
-
-    await new Promise(r => setTimeout(r, 2000));
-
-    // 6) 이미지 URL 수집
-    const imageUrls: string[] = await entryFrame.evaluate(() => {
-      const imgs = Array.from(document.querySelectorAll('img[src*="pstatic.net"], img[src*="naverusercontent"]'));
-      return imgs
-        .map((img) => (img as HTMLImageElement).src)
-        .filter(src => src && src.startsWith('http') && !src.includes('icon') && !src.includes('logo'))
-        .slice(0, 30);
-    });
-
-    await browser.close();
-
-    return NextResponse.json({ images: imageUrls, count: imageUrls.length });
+    return NextResponse.json({ images, placeId, count: images.length });
 
   } catch (err: any) {
-    if (browser) await browser.close().catch(() => {});
     console.error('[naver-photos]', err.message);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
