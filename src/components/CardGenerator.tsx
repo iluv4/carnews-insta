@@ -658,32 +658,65 @@ export default function CardGenerator() {
         {/* 포털 탭 배너 (탭 선택됐을 때 상단 인디케이터) */}
         {CLIENT_PORTALS[activeTab] && (
           <div className={styles.portalBanner}>
-            <span className={styles.portalBannerIcon}>{CLIENT_PORTALS[activeTab].icon}</span>
-            <span className={styles.portalBannerName}>{CLIENT_PORTALS[activeTab].name} 전용 포털</span>
-            {CLIENT_PORTALS[activeTab].clientInstagramUrl
-              ? <span className={styles.portalBannerSub}>사진 자동 로드 중...</span>
-              : <span className={styles.portalBannerSub} style={{ color: '#f59e0b' }}>⚠️ 인스타 URL 미연동</span>
-            }
-            {CLIENT_PORTALS[activeTab].clientInstagramUrl && (
-              <button
-                className={styles.portalBannerDownload}
-                onClick={() => handleDownloadOnly(CLIENT_PORTALS[activeTab].clientInstagramUrl)}
-                disabled={loading}
-                title="최근 게시물 사진 다운로드"
-              >
-                {loading ? '...' : '↓ 인스타 다운로드'}
-              </button>
-            )}
-            {CLIENT_PORTALS[activeTab].naverPlaceQuery && (
-              <button
-                className={styles.portalBannerDownload}
-                onClick={() => handleNaverPhotos(CLIENT_PORTALS[activeTab].naverPlaceQuery!)}
-                disabled={loading}
-                title="네이버 지도 사진 가져오기"
-                style={{ marginLeft: 6 }}
-              >
-                {loading ? '...' : '🗺️ 네이버 사진'}
-              </button>
+            {/* 상단 행: 이름 + 버튼들 */}
+            <div className={styles.portalBannerRow}>
+              <span className={styles.portalBannerIcon}>{CLIENT_PORTALS[activeTab].icon}</span>
+              <span className={styles.portalBannerName}>{CLIENT_PORTALS[activeTab].name} 전용 포털</span>
+              {CLIENT_PORTALS[activeTab].clientInstagramUrl
+                ? <span className={styles.portalBannerSub}>
+                    {loading ? '로딩 중...' : referenceImages.length > 0 ? `사진 ${referenceImages.length}장 로드됨` : '사진 자동 로드 중...'}
+                  </span>
+                : <span className={styles.portalBannerSub} style={{ color: '#f59e0b' }}>⚠️ 인스타 URL 미연동</span>
+              }
+              <div className={styles.portalBannerActions}>
+                {CLIENT_PORTALS[activeTab].clientInstagramUrl && (
+                  <button
+                    className={styles.portalBannerDownload}
+                    onClick={() => handleDownloadOnly(CLIENT_PORTALS[activeTab].clientInstagramUrl)}
+                    disabled={loading}
+                    title="인스타그램 최근 게시물 다운로드"
+                  >
+                    {loading ? '...' : '↓ 인스타'}
+                  </button>
+                )}
+                {CLIENT_PORTALS[activeTab].naverPlaceQuery && (
+                  <button
+                    className={styles.portalBannerDownload}
+                    onClick={() => handleNaverPhotos(CLIENT_PORTALS[activeTab].naverPlaceQuery!)}
+                    disabled={loading}
+                    title="네이버 지도 사진 가져오기"
+                  >
+                    {loading ? '...' : '🗺️ 네이버'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 썸네일 미리보기 스트립 */}
+            {referenceImages.length > 0 && (
+              <div className={styles.portalThumbStrip}>
+                {referenceImages.map((b64, idx) => (
+                  <div key={idx} className={styles.portalThumbItem}>
+                    <img src={b64} alt={`ref-${idx + 1}`} className={styles.portalThumbImg} />
+                    <button
+                      className={styles.portalThumbRemove}
+                      onClick={() => setReferenceImages(prev => prev.filter((_, i) => i !== idx))}
+                      title="삭제"
+                    >×</button>
+                  </div>
+                ))}
+                {/* 사진 추가 버튼 */}
+                <label className={styles.portalThumbAdd} title="사진 추가">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={(e) => e.target.files && handleAddReferenceImages(e.target.files)}
+                  />
+                  <span>+</span>
+                </label>
+              </div>
             )}
           </div>
         )}
