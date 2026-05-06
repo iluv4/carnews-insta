@@ -369,12 +369,14 @@
 }
 
 .galleryItem {
+  display: block;
   position: relative;
   border-radius: 12px;
   overflow: hidden;
   aspect-ratio: 1 / 1;
   background: #F0EFED;
   cursor: pointer;
+  text-decoration: none;
 }
 .galleryItem:hover .galleryImg {
   transform: scale(1.04);
