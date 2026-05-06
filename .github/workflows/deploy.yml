@@ -1,4 +1,4 @@
-name: Deploy to Vercel
+name: CI
 
 on:
   push:
@@ -6,12 +6,8 @@ on:
   pull_request:
     branches: [master]
 
-env:
-  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
 jobs:
-  deploy:
+  check:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,20 +25,9 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Dummy URL — prisma generate only needs schema, not a real connection
+          DATABASE_POSTGRES_PRISMA_URL: postgresql://ci:ci@localhost:5432/ci
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
 
       - name: Type check
         run: npx tsc --noEmit
-
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-
-      # PR → Preview 배포
-      - name: Deploy Preview
-        if: github.event_name == 'pull_request'
-        run: vercel deploy --token=${{ secrets.VERCEL_TOKEN }}
-
-      # master push → Production 배포
-      - name: Deploy Production
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
