@@ -10,8 +10,8 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { jsonlAnalysis, theme, reference, referenceImageBase64, jobId, clientContext } = await req.json();
-    if (jobId) createJob(jobId, 1, theme || '');
+    const { jsonlAnalysis, theme, reference, referenceImageBase64, jobId, clientContext, slideCount = 3 } = await req.json();
+    if (jobId) createJob(jobId, slideCount, theme || '');
 
     if (!jsonlAnalysis) {
       return NextResponse.json({ error: 'JSONL Analysis data is required' }, { status: 400 });
@@ -62,8 +62,17 @@ ${brandMoodBlock}
 [DESIGN DNA]
 ${trimmedAnalysis}`.trim();
 
-    const slidePrompts = [
+    const slidePrompts = slideCount === 6 ? [
+      `SLIDE 1 of 6 — COVER: Close-up hero shot of "${theme}". Bold Korean headline (max 2 lines): "부암동 소소한풍경 방문 전 체크!" Subtitle: "가격·시간·팁 한눈에". NO address, NO phone, NO hours — headline only. ${styleInstructions}`,
+      `SLIDE 2 of 6 — 운영시간: Show operating hours as clean info graphic. 화~토 11:30~22:00 / 일 11:30~21:30 / 월 정기휴무 / 브레이크타임 15:30~17:00. Theme: "${theme}". ${styleInstructions}`,
+      `SLIDE 3 of 6 — 코스 가격표: Display course menu prices clearly. A코스 28,000원 / B코스 42,000원 / C코스 58,000원 / Special 120,000원. Theme: "${theme}". ${styleInstructions}`,
+      `SLIDE 4 of 6 — 단품 가격표: Display à la carte prices. 가지찜 30,000 / 건두부쌈 22,000 / 오징어먹물볶음밥 16,000 / 하우스샐러드 14,000 / 버팔로윙 16,000. Theme: "${theme}". ${styleInstructions}`,
+      `SLIDE 5 of 6 — 방문 팁: Tip list card. ① 브레이크타임(15:30~17:00) 피하기 ② 월요일 정기휴무 확인 ③ 사전 예약 권장 ④ 전화 02-395-5035. Theme: "${theme}". ${styleInstructions}`,
+      `SLIDE 6 of 6 — CTA: Closing card. "부암동 데이트·가족 식사 전 저장!" / "예약 전 운영시간 꼭 확인". Small disclaimer: "2026년 5월 기준 / 방문 전 매장 확인 권장". Theme: "${theme}". ${styleInstructions}`,
+    ] : [
       `COVER: Close-up hero shot of "${theme}". One bold Korean headline (max 2 lines) that stops the scroll. NO address, NO phone, NO hours — headline only. ${styleInstructions}`,
+      `CONTENT slide: detail/feature shot of "${theme}", Korean body text with key points. ${styleInstructions}`,
+      `CLOSING CTA slide: atmospheric "${theme}" shot, Korean closing headline + CTA. ${styleInstructions}`,
     ];
 
     async function generateSlide(slidePrompt: string): Promise<string> {

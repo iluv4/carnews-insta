@@ -42,6 +42,7 @@ function normaliseUrl(url: string): string {
 // styleReferenceUrl: 레이아웃/디자인 DNA 학습용 레퍼런스
 // additionalReferenceUrls: 포털 로드 시 추가로 레퍼런스 이미지로 불러올 포스트 URL 목록
 // clientContext: AI 생성 프롬프트에 주입할 업체/메뉴 정보
+// slideCount: 생성할 슬라이드 수 (기본 3)
 const CLIENT_PORTALS: Record<string, {
   name: string;
   icon: string;
@@ -49,6 +50,7 @@ const CLIENT_PORTALS: Record<string, {
   styleReferenceUrl: string;
   additionalReferenceUrls?: string[];
   clientContext?: string;
+  slideCount?: number;
   placeholder: string;
 }> = {
   'portal-sosohan': {
@@ -62,28 +64,50 @@ const CLIENT_PORTALS: Record<string, {
     ],
     clientContext: `
 [업체 정보 - 소소한풍경]
-업종: 퓨전 한정식
+업종: 퓨전 한정식 코스 레스토랑
 위치: 서울 종로구 자하문로40길 75 (부암동 239-13)
 전화: 02-395-5035
-영업시간: 11:30 ~ 22:00 (브레이크타임 15:30~17:00, 라스트오더 20:30)
-휴무: 매주 월요일
-분위기: 가정집 개조, 아늑한 정원 및 야외테라스, 개별룸 보유
+분위기: 가정집 개조, 아늑한 정원·야외테라스·개별룸 보유. 데이트·가족 식사 최적.
 
-[코스 메뉴]
-- A코스: 28,000원
-- B코스: 42,000원
-- C코스: 58,000원
-- Special코스: 120,000원
+[영업시간 — 카드뉴스에 정확히 표기할 것]
+화~토: 11:30 ~ 22:00
+일요일: 11:30 ~ 21:30
+월요일: 정기휴무
+브레이크타임: 15:30 ~ 17:00
+※ 브레이크타임 피해서 방문 권장 문구 필수 포함
 
-[인기 단품 메뉴]
-- 가지찜: 30,000원
-- 건두부쌈: 22,000원
-- 오징어먹물볶음밥: 16,000원
-- 오리엔탈 치킨
+[코스 메뉴 — 가격 그대로 표기]
+A코스: 28,000원
+B코스: 42,000원
+C코스: 58,000원
+Special코스: 120,000원
+
+[단품 메뉴 — 가격 그대로 표기]
+가지찜: 30,000원
+건두부쌈: 22,000원
+오징어먹물볶음밥: 16,000원
+하우스 샐러드: 14,000원
+버팔로 윙: 16,000원
+
+[방문 팁 — 카드뉴스에 포함할 것]
+- 브레이크타임(15:30~17:00) 피해서 방문
+- 월요일 정기휴무 확인
+- 방문 전 테이블링·캐치테이블 예약 권장
+- 가격은 방문 전 매장 확인 권장 (2026년 5월 기준)
+- 전화 예약: 02-395-5035
+
+[6장 카드뉴스 구성]
+1장(표지): "부암동 소소한풍경 방문 전 체크!" / 부제: 가격·시간·팁 한눈에
+2장(운영시간): 화~토 11:30~22:00 / 일 11:30~21:30 / 월 휴무 / 브레이크 15:30~17:00
+3장(코스 가격): A 28,000 / B 42,000 / C 58,000 / Special 120,000
+4장(단품 가격): 가지찜 30,000 / 건두부쌈 22,000 / 오징어먹물볶음밥 16,000 / 샐러드 14,000 / 버팔로윙 16,000
+5장(방문 팁): 브레이크타임 피하기 / 월요일 휴무 / 예약 권장 / 전화 02-395-5035
+6장(CTA): "부암동 데이트·가족 식사 전 저장!" / "예약 전 운영시간 꼭 확인" / 하단 면책: 2026년 5월 기준
 
 [브랜드 키워드]
-소소함, 정갈함, 퓨전 한식, 계절 재료, 집밥 감성, 건강한 한 끼, 부암동 감성
+소소함, 정갈함, 퓨전 한식, 부암동 감성, 코스 요리, 가정집 레스토랑
     `.trim(),
+    slideCount: 6,
     placeholder: '소소한풍경 카드뉴스에 담을 내용을 입력하세요...',
   },
   'portal-insurance': {
@@ -478,12 +502,12 @@ export default function CardGenerator() {
     if (!jsonlData && !selectedTemplateId) return;
     setGenerating(true);
     setProgress(0);
-    // Show results page immediately with empty slots
-    setResultImages(['']);
     setCurrentStep(3);
 
     try {
       const activePortal = CLIENT_PORTALS[activeTab];
+      const slideCount = activePortal?.slideCount ?? 3;
+      setResultImages(Array(slideCount).fill(''));
       const res = await fetch('/api/transform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -493,6 +517,7 @@ export default function CardGenerator() {
           reference: generationMode,
           referenceImageBase64: referenceImages[0] || '',
           clientContext: activePortal?.clientContext || '',
+          slideCount,
         }),
       });
 
@@ -503,7 +528,9 @@ export default function CardGenerator() {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      const labels = ['cover', 'content', 'closing'];
+      const labels6 = ['표지', '운영시간', '코스가격', '단품가격', '방문팁', 'CTA'];
+      const labels3 = ['cover', 'content', 'closing'];
+      const labels = slideCount === 6 ? labels6 : labels3;
       let buffer = '';
 
       while (true) {
@@ -525,7 +552,8 @@ export default function CardGenerator() {
               next[event.index] = event.url;
               return next;
             });
-            setProgress(((event.index + 1) / 1) * 100);
+            setProgress(((event.index + 1) / slideCount) * 100);
+            autoDownload(event.url, `cardnews-${event.index + 1}-${labels[event.index]}.png`);
           }
         }
       }
@@ -863,7 +891,10 @@ export default function CardGenerator() {
                   <p className={styles.sectionDesc}>각 이미지를 클릭하면 확대해서 볼 수 있어요.</p>
                 </div>
                 <div className={styles.resultGrid}>
-                  {['COVER'].map((label, i) => (
+                  {(resultImages.length === 6
+                    ? ['표지', '운영시간', '코스가격', '단품가격', '방문팁', 'CTA']
+                    : ['COVER', 'CONTENT', 'CLOSING']
+                  ).map((label, i) => (
                     <div key={i} className={styles.resultCard}>
                       <span className={styles.resultLabel}>{label}</span>
                       {resultImages[i] ? (
@@ -877,7 +908,7 @@ export default function CardGenerator() {
                           </a>
                           <a
                             href={resultImages[i]}
-                            download={`cardnews-${label.toLowerCase()}.png`}
+                            download={`cardnews-${i + 1}-${label}.png`}
                             className={styles.resultDownloadBtn}
                           >
                             ↓ 다운로드
