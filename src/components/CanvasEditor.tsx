@@ -116,7 +116,7 @@ async function loadLayers(
         fontSize: layer.fontSize ? layer.fontSize * scale : 32 * scale,
         fontWeight: layer.fontWeight ?? 400,
         fill: layer.color ?? '#ffffff',
-        textAlign: layer.align ?? 'left',
+        textAlign: (layer.align ?? 'left') as any,
         lineHeight: layer.lineHeight ?? 1.2,
         selectable: !layer.locked,
       });
@@ -139,7 +139,7 @@ async function loadLayers(
       } else {
         shape = new fabric.Rect({ width: w, height: h, fill: layer.fill ?? '#cccccc', stroke: layer.stroke, rx: layer.radius, ry: layer.radius });
       }
-      shape.set({ left: x, top: y, selectable: !layer.locked });
+      shape.set({ left: x, top: y, selectable: !(layer as any).locked });
       (shape as any).__layerId = layer.id;
       canvas.add(shape);
     }
