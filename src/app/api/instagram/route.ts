@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     const username = extractUsername(url);
     if (username) {
       if (!apiKey || apiKey === 'your_openai_api_key_here') {
-        return NextResponse.json({ error: 'RAPIDAPI_KEY required for profile fetch' }, { status: 400 });
+        return NextResponse.json({ images: [], warning: 'RAPIDAPI_KEY not configured' });
       }
 
       console.log(`[instagram] fetching profile media for @${username}`);

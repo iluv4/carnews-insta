@@ -706,7 +706,7 @@ export default function CardGenerator() {
                             {tpl.thumbnail ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img
-                                src={tpl.thumbnail.startsWith('/saved-refs') ? tpl.thumbnail : `/api/proxy?url=${encodeURIComponent(tpl.thumbnail)}`}
+                                src={tpl.thumbnail.startsWith('/') ? tpl.thumbnail : `/api/proxy?url=${encodeURIComponent(tpl.thumbnail)}`}
                                 alt={tpl.name}
                                 className={styles.templateThumb}
                                 loading="lazy"
