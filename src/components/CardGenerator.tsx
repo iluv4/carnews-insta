@@ -228,7 +228,10 @@ export default function CardGenerator() {
           ...(portal.clientInstagramUrl ? [portal.clientInstagramUrl] : []),
           ...(portal.additionalReferenceUrls ?? []),
         ];
-        if (urlsToLoad.length === 0) return;
+        if (urlsToLoad.length === 0) {
+          setStatusText(`📁 ${portal.name} — 사진을 직접 업로드해주세요`);
+          return;
+        }
 
         Promise.all(
           urlsToLoad.map(u =>
@@ -243,7 +246,10 @@ export default function CardGenerator() {
           )
         ).then(async (results) => {
           const allImageUrls = results.flat();
-          if (allImageUrls.length === 0) return;
+          if (allImageUrls.length === 0) {
+            setStatusText(`📁 ${portal.name} — 사진을 직접 업로드해주세요`);
+            return;
+          }
           const settled = await Promise.allSettled(allImageUrls.slice(0, 9).map(imgUrlToBase64));
           const b64s = settled
             .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
@@ -251,6 +257,8 @@ export default function CardGenerator() {
           if (b64s.length > 0) {
             setReferenceImages(b64s);
             setStatusText(`✅ ${portal.name} 사진 ${b64s.length}장 로드 완료`);
+          } else {
+            setStatusText(`📁 ${portal.name} — 사진을 직접 업로드해주세요`);
           }
         });
       })
@@ -531,7 +539,7 @@ export default function CardGenerator() {
 
   const handleDownloadOnly = async (url: string) => {
     setLoading(true);
-    setStatusText('이미지 가져오는 중...');
+    setStatusText('인스타그램 사진 가져오는 중...');
     try {
       const res = await fetch('/api/instagram', {
         method: 'POST',
@@ -539,11 +547,22 @@ export default function CardGenerator() {
         body: JSON.stringify({ url }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      const images: string[] = data.images || [];
-      setStatusText(`✅ ${images.length}장 로드 완료!`);
+      if (!res.ok) throw new Error(data.error ?? '인스타그램 오류');
+      const imageUrls: string[] = data.images || [];
+      if (imageUrls.length === 0) throw new Error('사진을 찾지 못했습니다');
+      // URL → base64 변환 후 referenceImages에 추가
+      const settled = await Promise.allSettled(imageUrls.slice(0, 9).map(imgUrlToBase64));
+      const b64s = settled
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+        .map(r => r.value);
+      if (b64s.length > 0) {
+        setReferenceImages(prev => [...prev, ...b64s].slice(0, 12));
+        setStatusText(`✅ 인스타그램 사진 ${b64s.length}장 로드 완료!`);
+      } else {
+        throw new Error('이미지 변환 실패');
+      }
     } catch (e: any) {
-      setStatusText(`오류: ${e.message}`);
+      setStatusText(`↑ 인스타 실패 — 📁 직접 업로드를 사용해주세요 (${e.message})`);
     } finally {
       setLoading(false);
     }
@@ -687,19 +706,27 @@ export default function CardGenerator() {
             <div className={styles.portalBannerRow}>
               <span className={styles.portalBannerIcon}>{CLIENT_PORTALS[activeTab].icon}</span>
               <span className={styles.portalBannerName}>{CLIENT_PORTALS[activeTab].name} 전용 포털</span>
-              {CLIENT_PORTALS[activeTab].clientInstagramUrl
-                ? <span className={styles.portalBannerSub}>
-                    {loading ? '로딩 중...' : referenceImages.length > 0 ? `사진 ${referenceImages.length}장 로드됨` : '사진 자동 로드 중...'}
-                  </span>
-                : <span className={styles.portalBannerSub} style={{ color: '#f59e0b' }}>⚠️ 인스타 URL 미연동</span>
-              }
+              <span className={styles.portalBannerSub}>
+                {loading ? '로딩 중...' : referenceImages.length > 0 ? `사진 ${referenceImages.length}장 로드됨` : '사진을 추가해주세요'}
+              </span>
               <div className={styles.portalBannerActions}>
+                {/* 📁 직접 업로드 — 항상 표시 */}
+                <label className={styles.portalBannerDownload} title="내 사진 직접 업로드" style={{ cursor: 'pointer' }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={(e) => e.target.files && handleAddReferenceImages(e.target.files)}
+                  />
+                  📁 사진 업로드
+                </label>
                 {CLIENT_PORTALS[activeTab].clientInstagramUrl && (
                   <button
                     className={styles.portalBannerDownload}
                     onClick={() => handleDownloadOnly(CLIENT_PORTALS[activeTab].clientInstagramUrl)}
                     disabled={loading}
-                    title="인스타그램 최근 게시물 다운로드"
+                    title="인스타그램 최근 게시물 가져오기"
                   >
                     {loading ? '...' : '↓ 인스타'}
                   </button>
