@@ -130,6 +130,7 @@ export default function CardGenerator() {
   const [jsonlData, setJsonlData] = useState('');
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [resultImages, setResultImages] = useState<string[]>([]);
+  const [resultBlurLevels, setResultBlurLevels] = useState<number[]>([0]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [theme, setTheme] = useState('');
   const [generationMode, setGenerationMode] = useState<'creative' | 'strict'>('creative');
@@ -527,7 +528,13 @@ export default function CardGenerator() {
               next[event.index] = event.url;
               return next;
             });
-            setProgress(((event.index + 1) / 1) * 100);
+            // partial: blurry preview / final: sharp
+            setResultBlurLevels(prev => {
+              const next = [...prev];
+              next[event.index] = event.partial ? (event.blurLevel ?? 1) : 0;
+              return next;
+            });
+            if (!event.partial) setProgress(100);
           }
         }
       }
@@ -926,20 +933,32 @@ export default function CardGenerator() {
                       <span className={styles.resultLabel}>{label}</span>
                       {resultImages[i] ? (
                         <>
-                          <a href={resultImages[i]} target="_blank" rel="noopener noreferrer">
+                          <a href={resultBlurLevels[i] ? undefined : resultImages[i]} target="_blank" rel="noopener noreferrer" style={{ display: 'block', position: 'relative' }}>
                             <img
                               src={resultImages[i]}
                               alt={label}
                               className={styles.resultImg}
+                              style={{
+                                filter: resultBlurLevels[i] ? `blur(${resultBlurLevels[i] * 8}px)` : 'none',
+                                transition: 'filter 0.4s ease',
+                                transform: resultBlurLevels[i] ? 'scale(1.05)' : 'scale(1)',
+                              }}
                             />
+                            {resultBlurLevels[i] > 0 && (
+                              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.85rem', fontWeight: 600, textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
+                                ✨ 생성 중...
+                              </div>
+                            )}
                           </a>
-                          <a
-                            href={resultImages[i]}
-                            download={`cardnews-${label.toLowerCase()}.png`}
-                            className={styles.resultDownloadBtn}
-                          >
-                            ↓ 다운로드
-                          </a>
+                          {!resultBlurLevels[i] && (
+                            <a
+                              href={resultImages[i]}
+                              download={`cardnews-${label.toLowerCase()}.jpg`}
+                              className={styles.resultDownloadBtn}
+                            >
+                              ↓ 다운로드
+                            </a>
+                          )}
                         </>
                       ) : (
                         <div className={styles.resultSkeleton} />

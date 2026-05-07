@@ -19,18 +19,20 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey || apiKey === 'your_openai_api_key_here' || apiKey === 'dummy_key') {
-      // Simulate SSE streaming for dev mode
+      // Dev mode: simulate partial → final sequence
       const encoder = new TextEncoder();
-      const mockUrls = [
-        'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=1000&auto=format&fit=crop',
-      ];
+      const mockUrl = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=1000&auto=format&fit=crop';
       const stream = new ReadableStream({
         async start(controller) {
-          for (let i = 0; i < 1; i++) {
-            await new Promise(r => setTimeout(r, 800));
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ index: i, url: mockUrls[i] })}\n\n`));
-          }
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
+          const send = (data: object) =>
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          await new Promise(r => setTimeout(r, 600));
+          send({ index: 0, partial: true, blurLevel: 2, url: mockUrl });
+          await new Promise(r => setTimeout(r, 600));
+          send({ index: 0, partial: true, blurLevel: 1, url: mockUrl });
+          await new Promise(r => setTimeout(r, 600));
+          send({ index: 0, url: mockUrl });
+          send({ done: true });
           controller.close();
         },
       });
@@ -41,15 +43,15 @@ export async function POST(req: Request) {
 
     const trimmedAnalysis = jsonlAnalysis.substring(0, 4000);
 
-    // Extract brand mood only — never render operational details (address, phone, hours) as image text
+    const operationalPattern = /전화|영업시간|휴무|위치|주소|서울|02-|@|http|\d{2}:\d{2}/;
     const brandMoodBlock = clientContext
-      ? `\n[BRAND TONE — for mood/style reference only, DO NOT render as text in image]\n${
-          clientContext
-            .split('\n')
-            .filter((l: string) => !/전화|영업시간|휴무|위치|주소|서울|02-|@|http|\d{2}:\d{2}/.test(l))
-            .join('\n')
-            .trim()
-        }\n`
+      ? '\n[BRAND TONE — for mood/style reference only, DO NOT render as text in image]\n' +
+        clientContext
+          .split('\n')
+          .filter((l: string) => !operationalPattern.test(l))
+          .join('\n')
+          .trim() +
+        '\n'
       : '';
 
     const styleInstructions = `
@@ -62,67 +64,68 @@ ${brandMoodBlock}
 [DESIGN DNA]
 ${trimmedAnalysis}`.trim();
 
-    const slidePrompts = [
-      `COVER: Close-up hero shot of "${theme}". One bold Korean headline (max 2 lines) that stops the scroll. NO address, NO phone, NO hours — headline only. ${styleInstructions}`,
-    ];
+    const slidePrompt = `COVER: Close-up hero shot of "${theme}". One bold Korean headline (max 2 lines) that stops the scroll. NO address, NO phone, NO hours — headline only. ${styleInstructions}`;
 
-    async function generateSlide(slidePrompt: string): Promise<string> {
-      if (referenceImageBase64) {
-        const base64Data = referenceImageBase64.replace(/^data:image\/\w+;base64,/, '');
-        const mimeMatch = referenceImageBase64.match(/^data:(image\/\w+);base64,/);
-        const mimeType = (mimeMatch?.[1] || 'image/png') as 'image/png' | 'image/jpeg' | 'image/webp';
-        const imageBuffer = Buffer.from(base64Data, 'base64');
-        const imageFile = new File([imageBuffer], 'reference.png', { type: mimeType });
-
-        const res = await (openai.images as any).edit({
-          model: 'gpt-image-2',
-          image: imageFile,
-          prompt: slidePrompt.substring(0, 32000),
-          n: 1,
-          size: '1024x1536',
-          quality: 'medium',
-          output_format: 'jpeg',
-        });
-
-        const item = res.data?.[0] as any;
-        if (item?.b64_json) return `data:image/jpeg;base64,${item.b64_json}`;
-        if (item?.url) return item.url;
-        throw new Error('gpt-image-2 edit 응답이 비어 있습니다.');
-      }
-
-      const res = await openai.images.generate({
-        model: 'gpt-image-2',
-        prompt: slidePrompt.substring(0, 32000),
-        n: 1,
-        size: '1024x1536',
-        quality: 'high',
-      } as any);
-
-      const item = res.data?.[0] as any;
-      if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
-      if (item?.url) return item.url;
-      throw new Error('gpt-image-2 generate 응답이 비어 있습니다.');
-    }
-
-    // SSE stream — send each slide as soon as it's ready
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         const send = (data: object) =>
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
 
-        await Promise.allSettled(
-          slidePrompts.map(async (prompt, i) => {
-            try {
-              const url = await generateSlide(prompt);
-              if (jobId) updateJobSlide(jobId, i, { url });
-              send({ index: i, url });
-            } catch (e: any) {
-              if (jobId) updateJobSlide(jobId, i, { error: e.message });
-              send({ index: i, error: e.message });
+        try {
+          // Build input content
+          const inputContent: any[] = [
+            { type: 'input_text', text: slidePrompt.substring(0, 32000) },
+          ];
+          if (referenceImageBase64) {
+            inputContent.push({ type: 'input_image', image_url: referenceImageBase64 });
+          }
+
+          const responseStream = await (openai as any).responses.create({
+            model: 'gpt-4.1-mini',
+            input: inputContent,
+            tools: [{
+              type: 'image_generation',
+              size: '1024x1536',
+              quality: 'medium',
+              output_format: 'jpeg',
+              partial_images: 2,
+            }],
+            stream: true,
+          });
+
+          let finalUrl = '';
+
+          for await (const event of responseStream) {
+            // Partial previews — show blurry versions
+            if (event.type === 'response.image_generation_call.partial_image') {
+              const b64 = event.partial_image_b64;
+              const blurLevel = event.partial_image_index === 0 ? 2 : 1;
+              if (b64) {
+                send({ index: 0, partial: true, blurLevel, url: `data:image/jpeg;base64,${b64}` });
+              }
             }
-          })
-        );
+
+            // Final image in completed response
+            if (event.type === 'response.completed') {
+              const output: any[] = event.response?.output ?? [];
+              for (const item of output) {
+                if (item.type === 'image_generation_call' && item.result) {
+                  finalUrl = `data:image/jpeg;base64,${item.result}`;
+                }
+              }
+            }
+          }
+
+          if (!finalUrl) throw new Error('이미지 생성 결과가 없습니다.');
+
+          if (jobId) updateJobSlide(jobId, 0, { url: finalUrl });
+          send({ index: 0, url: finalUrl });
+
+        } catch (e: any) {
+          if (jobId) updateJobSlide(jobId, 0, { error: e.message });
+          send({ index: 0, error: e.message });
+        }
 
         send({ done: true });
         controller.close();
