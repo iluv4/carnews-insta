@@ -1471,3 +1471,30 @@
   white-space: nowrap;
   margin: 0;
 }
+
+.naverPhotoRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  transition: border-color 0.2s;
+}
+.naverPhotoRow:focus-within {
+  border-color: var(--primary);
+}
+.naverPhotoRow .modernInput {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 0.95rem;
+  background: transparent;
+}
+.naverPhotoRow .modernBtn {
+  white-space: nowrap;
+  padding: 8px 16px;
+  font-size: 0.88rem;
+}

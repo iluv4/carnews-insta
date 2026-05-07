@@ -143,6 +143,8 @@ export default function CardGenerator() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [examplePreviews, setExamplePreviews] = useState<Record<string, string>>({});
   const [clientAnalysisCache, setClientAnalysisCache] = useState<Record<string, string>>({});
+  const [naverBusinessName, setNaverBusinessName] = useState('');
+  const [naverLoading, setNaverLoading] = useState(false);
 
   const generatingStartRef = useRef<number>(0);
 
@@ -286,6 +288,46 @@ export default function CardGenerator() {
       return null;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleNaverPhotos = async () => {
+    if (!naverBusinessName.trim()) return;
+    setNaverLoading(true);
+    setStatusText('🗺️ 네이버 지도에서 사진 가져오는 중...');
+    try {
+      const res = await fetch('/api/naver-photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessName: naverBusinessName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // 이미지 URL → base64 변환
+      const settled = await Promise.allSettled(
+        (data.photos as string[]).slice(0, 9).map(url =>
+          fetch(`/api/proxy?url=${encodeURIComponent(url)}`)
+            .then(r => r.blob())
+            .then(blob => new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            }))
+        )
+      );
+      const b64s = settled
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+        .map(r => r.value);
+
+      if (b64s.length === 0) throw new Error('사진 변환에 실패했습니다.');
+      setReferenceImages(prev => [...prev, ...b64s]);
+      setStatusText(`✅ 네이버 지도 사진 ${b64s.length}장 로드 완료`);
+    } catch (err: any) {
+      setStatusText(`❌ ${err.message}`);
+    } finally {
+      setNaverLoading(false);
     }
   };
 
@@ -866,6 +908,26 @@ export default function CardGenerator() {
                     </div>
                   )}
 
+                  {/* 네이버 지도 사진 가져오기 */}
+                  <div className={styles.naverPhotoRow}>
+                    <span className={styles.inputIcon}>🗺️</span>
+                    <input
+                      type="text"
+                      className={styles.modernInput}
+                      placeholder="가게 이름 입력 (예: 소소한풍경)"
+                      value={naverBusinessName}
+                      onChange={e => setNaverBusinessName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleNaverPhotos()}
+                    />
+                    <button
+                      className={styles.modernBtn}
+                      onClick={handleNaverPhotos}
+                      disabled={naverLoading || !naverBusinessName.trim()}
+                    >
+                      {naverLoading ? '가져오는 중...' : '네이버 지도 사진'}
+                    </button>
+                  </div>
+
                   {referenceImages.length === 0 && (
                     <label className={styles.uploadArea}>
                       <input
@@ -877,7 +939,7 @@ export default function CardGenerator() {
                       />
                       <div className={styles.uploadPlaceholder}>
                         <span style={{ fontSize: '1.8rem' }}>📷</span>
-                        <span>클릭해서 내 사진 업로드 (여러 장 가능)</span>
+                        <span>또는 클릭해서 직접 업로드</span>
                       </div>
                     </label>
                   )}
