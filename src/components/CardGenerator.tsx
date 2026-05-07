@@ -42,7 +42,6 @@ function normaliseUrl(url: string): string {
 // styleReferenceUrl: 레이아웃/디자인 DNA 학습용 레퍼런스
 // additionalReferenceUrls: 포털 로드 시 추가로 레퍼런스 이미지로 불러올 포스트 URL 목록
 // clientContext: AI 생성 프롬프트에 주입할 업체/메뉴 정보
-// slideCount: 생성할 슬라이드 수 (기본 3)
 const CLIENT_PORTALS: Record<string, {
   name: string;
   icon: string;
@@ -50,8 +49,6 @@ const CLIENT_PORTALS: Record<string, {
   styleReferenceUrl: string;
   additionalReferenceUrls?: string[];
   clientContext?: string;
-  slideCount?: number;
-  naverPlaceQuery?: string;   // 네이버 지도 사진 크롤링용 검색어
   placeholder: string;
 }> = {
   'portal-sosohan': {
@@ -65,51 +62,28 @@ const CLIENT_PORTALS: Record<string, {
     ],
     clientContext: `
 [업체 정보 - 소소한풍경]
-업종: 퓨전 한정식 코스 레스토랑
+업종: 퓨전 한정식
 위치: 서울 종로구 자하문로40길 75 (부암동 239-13)
 전화: 02-395-5035
-분위기: 가정집 개조, 아늑한 정원·야외테라스·개별룸 보유. 데이트·가족 식사 최적.
+영업시간: 11:30 ~ 22:00 (브레이크타임 15:30~17:00, 라스트오더 20:30)
+휴무: 매주 월요일
+분위기: 가정집 개조, 아늑한 정원 및 야외테라스, 개별룸 보유
 
-[영업시간 — 카드뉴스에 정확히 표기할 것]
-화~토: 11:30 ~ 22:00
-일요일: 11:30 ~ 21:30
-월요일: 정기휴무
-브레이크타임: 15:30 ~ 17:00
-※ 브레이크타임 피해서 방문 권장 문구 필수 포함
+[코스 메뉴]
+- A코스: 28,000원
+- B코스: 42,000원
+- C코스: 58,000원
+- Special코스: 120,000원
 
-[코스 메뉴 — 가격 그대로 표기]
-A코스: 28,000원
-B코스: 42,000원
-C코스: 58,000원
-Special코스: 120,000원
-
-[단품 메뉴 — 가격 그대로 표기]
-가지찜: 30,000원
-건두부쌈: 22,000원
-오징어먹물볶음밥: 16,000원
-하우스 샐러드: 14,000원
-버팔로 윙: 16,000원
-
-[방문 팁 — 카드뉴스에 포함할 것]
-- 브레이크타임(15:30~17:00) 피해서 방문
-- 월요일 정기휴무 확인
-- 방문 전 테이블링·캐치테이블 예약 권장
-- 가격은 방문 전 매장 확인 권장 (2026년 5월 기준)
-- 전화 예약: 02-395-5035
-
-[6장 카드뉴스 구성]
-1장(표지): "부암동 소소한풍경 방문 전 체크!" / 부제: 가격·시간·팁 한눈에
-2장(운영시간): 화~토 11:30~22:00 / 일 11:30~21:30 / 월 휴무 / 브레이크 15:30~17:00
-3장(코스 가격): A 28,000 / B 42,000 / C 58,000 / Special 120,000
-4장(단품 가격): 가지찜 30,000 / 건두부쌈 22,000 / 오징어먹물볶음밥 16,000 / 샐러드 14,000 / 버팔로윙 16,000
-5장(방문 팁): 브레이크타임 피하기 / 월요일 휴무 / 예약 권장 / 전화 02-395-5035
-6장(CTA): "부암동 데이트·가족 식사 전 저장!" / "예약 전 운영시간 꼭 확인" / 하단 면책: 2026년 5월 기준
+[인기 단품 메뉴]
+- 가지찜: 30,000원
+- 건두부쌈: 22,000원
+- 오징어먹물볶음밥: 16,000원
+- 오리엔탈 치킨
 
 [브랜드 키워드]
-소소함, 정갈함, 퓨전 한식, 부암동 감성, 코스 요리, 가정집 레스토랑
+소소함, 정갈함, 퓨전 한식, 계절 재료, 집밥 감성, 건강한 한 끼, 부암동 감성
     `.trim(),
-    slideCount: 6,
-    naverPlaceQuery: '소소한풍경 부암동',
     placeholder: '소소한풍경 카드뉴스에 담을 내용을 입력하세요...',
   },
   'portal-insurance': {
@@ -141,6 +115,7 @@ export default function CardGenerator() {
 
   // Navigation & Stepper State
   const [currentStep, setCurrentStep] = useState(0);
+  const [showTemplateLib, setShowTemplateLib] = useState(false);
 
   // UI States
   const [statusText, setStatusText] = useState('');
@@ -167,8 +142,6 @@ export default function CardGenerator() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [examplePreviews, setExamplePreviews] = useState<Record<string, string>>({});
   const [clientAnalysisCache, setClientAnalysisCache] = useState<Record<string, string>>({});
-  // 스타일 레퍼런스 포스트의 실제 카드뉴스 이미지 (images.edit 템플릿으로 사용)
-  const [styleTemplateBase64, setStyleTemplateBase64] = useState<string>('');
 
   const generatingStartRef = useRef<number>(0);
 
@@ -199,70 +172,37 @@ export default function CardGenerator() {
     setJsonlData('');
     setCurrentStep(2);
 
-    // 1) 프리셋 우선 로드 → 없으면 Instagram API fallback
-    const portalId = activeTab.replace('portal-', '');
-    const manifestUrl = `/presets/${portalId}/manifest.json`;
+    // 1) 클라이언트 인스타 사진 + 추가 레퍼런스 포스트 → 내 사진으로 로드
+    const urlsToLoad = [
+      ...(portal.clientInstagramUrl ? [portal.clientInstagramUrl] : []),
+      ...(portal.additionalReferenceUrls ?? []),
+    ];
 
-    fetch(manifestUrl)
-      .then(r => r.ok ? r.json() : null)
-      .then(async (manifest) => {
-        if (manifest?.photos?.length > 0) {
-          // ✅ 프리셋 있음 → 즉시 로드 (API 호출 없음)
-          const settled = await Promise.allSettled(
-            manifest.photos.slice(0, 12).map((path: string) =>
-              imgUrlToBase64(path)
-            )
-          );
-          const b64s = settled
-            .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
-            .map(r => r.value);
-          if (b64s.length > 0) {
-            setReferenceImages(b64s);
-            setStatusText(`✅ ${portal.name} 프리셋 ${b64s.length}장 로드됨`);
-            return;
-          }
+    if (urlsToLoad.length > 0) {
+      Promise.all(
+        urlsToLoad.map(u =>
+          fetch('/api/instagram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: u }),
+          })
+            .then(r => r.json())
+            .then((data): string[] => data.images ?? [])
+            .catch(() => [] as string[])
+        )
+      ).then(async (results) => {
+        const allImageUrls = results.flat();
+        if (allImageUrls.length === 0) return;
+        const settled = await Promise.allSettled(allImageUrls.slice(0, 9).map(imgUrlToBase64));
+        const b64s = settled
+          .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+          .map(r => r.value);
+        if (b64s.length > 0) {
+          setReferenceImages(b64s);
+          setStatusText(`✅ ${portal.name} 사진 ${b64s.length}장 로드 완료`);
         }
-
-        // ⚡ 프리셋 없음 → Instagram API fallback
-        const urlsToLoad = [
-          ...(portal.clientInstagramUrl ? [portal.clientInstagramUrl] : []),
-          ...(portal.additionalReferenceUrls ?? []),
-        ];
-        if (urlsToLoad.length === 0) {
-          setStatusText(`📁 ${portal.name} — 사진을 직접 업로드해주세요`);
-          return;
-        }
-
-        Promise.all(
-          urlsToLoad.map(u =>
-            fetch('/api/instagram', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ url: u }),
-            })
-              .then(r => r.json())
-              .then((data): string[] => data.images ?? [])
-              .catch(() => [] as string[])
-          )
-        ).then(async (results) => {
-          const allImageUrls = results.flat();
-          if (allImageUrls.length === 0) {
-            setStatusText(`📁 ${portal.name} — 사진을 직접 업로드해주세요`);
-            return;
-          }
-          const settled = await Promise.allSettled(allImageUrls.slice(0, 9).map(imgUrlToBase64));
-          const b64s = settled
-            .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
-            .map(r => r.value);
-          if (b64s.length > 0) {
-            setReferenceImages(b64s);
-            setStatusText(`✅ ${portal.name} 사진 ${b64s.length}장 로드 완료`);
-          } else {
-            setStatusText(`📁 ${portal.name} — 사진을 직접 업로드해주세요`);
-          }
-        });
-      })
-      .catch(console.error);
+      }).catch(console.error);
+    }
 
     // 2) 스타일 레퍼런스 분석 (캐시 우선)
     if (portal.styleReferenceUrl) {
@@ -462,12 +402,6 @@ export default function CardGenerator() {
       const images = await handleFetchImages(url);
       if (images && images.length > 0) {
         setSelectedImageIndex(0);
-
-        // 스타일 레퍼런스 첫 번째 이미지를 레이아웃 템플릿으로 저장
-        imgUrlToBase64(images[0])
-          .then(b64 => setStyleTemplateBase64(b64))
-          .catch(() => {});
-
         const analysis = await handleAnalyze(images);
         if (analysis) {
           setStatusText('맞춤형 스타일 학습 완료! 내용을 입력하세요.');
@@ -507,39 +441,9 @@ export default function CardGenerator() {
     }
   };
 
-  const handleNaverPhotos = async (query: string) => {
-    setLoading(true);
-    setStatusText('🗺️ 네이버 지도 사진 크롤링 중...');
-    try {
-      const res = await fetch('/api/naver-photos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      const images: string[] = data.images || [];
-      if (images.length === 0) throw new Error('사진을 찾지 못했습니다.');
-
-      // base64 변환 후 referenceImages에 추가
-      const settled = await Promise.allSettled(images.slice(0, 9).map(imgUrlToBase64));
-      const b64s = settled
-        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
-        .map(r => r.value);
-
-      setReferenceImages(prev => [...prev, ...b64s].slice(0, 12));
-      setStatusText(`✅ 네이버 지도 사진 ${b64s.length}장 추가됨`);
-    } catch (e: any) {
-      setStatusText(`오류: ${e.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDownloadOnly = async (url: string) => {
     setLoading(true);
-    setStatusText('인스타그램 사진 가져오는 중...');
+    setStatusText('이미지 가져오는 중...');
     try {
       const res = await fetch('/api/instagram', {
         method: 'POST',
@@ -547,22 +451,11 @@ export default function CardGenerator() {
         body: JSON.stringify({ url }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? '인스타그램 오류');
-      const imageUrls: string[] = data.images || [];
-      if (imageUrls.length === 0) throw new Error('사진을 찾지 못했습니다');
-      // URL → base64 변환 후 referenceImages에 추가
-      const settled = await Promise.allSettled(imageUrls.slice(0, 9).map(imgUrlToBase64));
-      const b64s = settled
-        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
-        .map(r => r.value);
-      if (b64s.length > 0) {
-        setReferenceImages(prev => [...prev, ...b64s].slice(0, 12));
-        setStatusText(`✅ 인스타그램 사진 ${b64s.length}장 로드 완료!`);
-      } else {
-        throw new Error('이미지 변환 실패');
-      }
+      if (!res.ok) throw new Error(data.error);
+      const images: string[] = data.images || [];
+      setStatusText(`✅ ${images.length}장 로드 완료!`);
     } catch (e: any) {
-      setStatusText(`↑ 인스타 실패 — 📁 직접 업로드를 사용해주세요 (${e.message})`);
+      setStatusText(`오류: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -575,6 +468,7 @@ export default function CardGenerator() {
       setStatusText(`✨ "${tpl.name}" 스타일 적용됨`);
     }
     if (tpl.source) setInstagramUrl(tpl.source);
+    setShowTemplateLib(false);
     setCurrentStep(2);
   };
 
@@ -586,12 +480,12 @@ export default function CardGenerator() {
     if (!jsonlData && !selectedTemplateId) return;
     setGenerating(true);
     setProgress(0);
+    // Show results page immediately with empty slots
+    setResultImages(['']);
     setCurrentStep(3);
 
     try {
       const activePortal = CLIENT_PORTALS[activeTab];
-      const slideCount = activePortal?.slideCount ?? 3;
-      setResultImages(Array(slideCount).fill(''));
       const res = await fetch('/api/transform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -599,12 +493,8 @@ export default function CardGenerator() {
           jsonlAnalysis: jsonlData || templates.find(t => t.id === selectedTemplateId)?.content,
           theme,
           reference: generationMode,
-          // styleTemplateBase64: 레이아웃 고정용 카드뉴스 템플릿 이미지
-          // referenceImageBase64: 콘텐츠 소스용 클라이언트 실제 사진
-          styleTemplateBase64: styleTemplateBase64 || referenceImages[0] || '',
           referenceImageBase64: referenceImages[0] || '',
           clientContext: activePortal?.clientContext || '',
-          slideCount,
         }),
       });
 
@@ -615,9 +505,7 @@ export default function CardGenerator() {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      const labels6 = ['표지', '운영시간', '코스가격', '단품가격', '방문팁', 'CTA'];
-      const labels3 = ['cover', 'content', 'closing'];
-      const labels = slideCount === 6 ? labels6 : labels3;
+      const labels = ['cover', 'content', 'closing'];
       let buffer = '';
 
       while (true) {
@@ -639,8 +527,7 @@ export default function CardGenerator() {
               next[event.index] = event.url;
               return next;
             });
-            setProgress(((event.index + 1) / slideCount) * 100);
-            autoDownload(event.url, `cardnews-${event.index + 1}-${labels[event.index]}.png`);
+            setProgress(((event.index + 1) / 1) * 100);
           }
         }
       }
@@ -702,73 +589,21 @@ export default function CardGenerator() {
         {/* 포털 탭 배너 (탭 선택됐을 때 상단 인디케이터) */}
         {CLIENT_PORTALS[activeTab] && (
           <div className={styles.portalBanner}>
-            {/* 상단 행: 이름 + 버튼들 */}
-            <div className={styles.portalBannerRow}>
-              <span className={styles.portalBannerIcon}>{CLIENT_PORTALS[activeTab].icon}</span>
-              <span className={styles.portalBannerName}>{CLIENT_PORTALS[activeTab].name} 전용 포털</span>
-              <span className={styles.portalBannerSub}>
-                {loading ? '로딩 중...' : referenceImages.length > 0 ? `사진 ${referenceImages.length}장 로드됨` : '사진을 추가해주세요'}
-              </span>
-              <div className={styles.portalBannerActions}>
-                {/* 📁 직접 업로드 — 항상 표시 */}
-                <label className={styles.portalBannerDownload} title="내 사진 직접 업로드" style={{ cursor: 'pointer' }}>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    style={{ display: 'none' }}
-                    onChange={(e) => e.target.files && handleAddReferenceImages(e.target.files)}
-                  />
-                  📁 사진 업로드
-                </label>
-                {CLIENT_PORTALS[activeTab].clientInstagramUrl && (
-                  <button
-                    className={styles.portalBannerDownload}
-                    onClick={() => handleDownloadOnly(CLIENT_PORTALS[activeTab].clientInstagramUrl)}
-                    disabled={loading}
-                    title="인스타그램 최근 게시물 가져오기"
-                  >
-                    {loading ? '...' : '↓ 인스타'}
-                  </button>
-                )}
-                {CLIENT_PORTALS[activeTab].naverPlaceQuery && (
-                  <button
-                    className={styles.portalBannerDownload}
-                    onClick={() => handleNaverPhotos(CLIENT_PORTALS[activeTab].naverPlaceQuery!)}
-                    disabled={loading}
-                    title="네이버 지도 사진 가져오기"
-                  >
-                    {loading ? '...' : '🗺️ 네이버'}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* 썸네일 미리보기 스트립 */}
-            {referenceImages.length > 0 && (
-              <div className={styles.portalThumbStrip}>
-                {referenceImages.map((b64, idx) => (
-                  <div key={idx} className={styles.portalThumbItem}>
-                    <img src={b64} alt={`ref-${idx + 1}`} className={styles.portalThumbImg} />
-                    <button
-                      className={styles.portalThumbRemove}
-                      onClick={() => setReferenceImages(prev => prev.filter((_, i) => i !== idx))}
-                      title="삭제"
-                    >×</button>
-                  </div>
-                ))}
-                {/* 사진 추가 버튼 */}
-                <label className={styles.portalThumbAdd} title="사진 추가">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    style={{ display: 'none' }}
-                    onChange={(e) => e.target.files && handleAddReferenceImages(e.target.files)}
-                  />
-                  <span>+</span>
-                </label>
-              </div>
+            <span className={styles.portalBannerIcon}>{CLIENT_PORTALS[activeTab].icon}</span>
+            <span className={styles.portalBannerName}>{CLIENT_PORTALS[activeTab].name} 전용 포털</span>
+            {CLIENT_PORTALS[activeTab].clientInstagramUrl
+              ? <span className={styles.portalBannerSub}>사진 자동 로드 중...</span>
+              : <span className={styles.portalBannerSub} style={{ color: '#f59e0b' }}>⚠️ 인스타 URL 미연동</span>
+            }
+            {CLIENT_PORTALS[activeTab].clientInstagramUrl && (
+              <button
+                className={styles.portalBannerDownload}
+                onClick={() => handleDownloadOnly(CLIENT_PORTALS[activeTab].clientInstagramUrl)}
+                disabled={loading}
+                title="최근 게시물 사진 다운로드"
+              >
+                {loading ? '...' : '↓ 사진 다운로드'}
+              </button>
             )}
           </div>
         )}
@@ -929,6 +764,62 @@ export default function CardGenerator() {
                   <p className={styles.sectionDesc}>방금 학습한 디자인 DNA를 바탕으로 새로운 카드를 만듭니다.</p>
                 </div>
 
+                {/* ── 인라인 템플릿 라이브러리 (포털 탭용) ── */}
+                {templates.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <button
+                      className={styles.modernChip}
+                      onClick={() => setShowTemplateLib(v => !v)}
+                      style={{ marginBottom: showTemplateLib ? 12 : 0 }}
+                    >
+                      📌 저장 레퍼런스 라이브러리 {showTemplateLib ? '▲' : '▼'}
+                    </button>
+                    {showTemplateLib && (
+                      <>
+                        <div className={styles.categoryFilterRow}>
+                          {['전체', '교육/정보', 'SNS/마케팅', '음식점/카페', '보험/금융', '뷰티/코스메틱', '사진관/스튜디오', '패션/라이프스타일', '부동산/인테리어', '기타'].map(cat => (
+                            <button
+                              key={cat}
+                              className={`${styles.categoryChip} ${templateCategory === (cat === '전체' ? 'all' : cat) ? styles.categoryChipActive : ''}`}
+                              onClick={() => setTemplateCategory(cat === '전체' ? 'all' : cat)}
+                            >
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                        <div className={styles.templateGrid}>
+                          {filteredTemplates.map(tpl => (
+                            <div
+                              key={tpl.id}
+                              className={`${styles.templateItem} ${selectedTemplateId === tpl.id ? styles.templateItemSelected : ''}`}
+                              onClick={() => handleSelectTemplate(tpl)}
+                            >
+                              <div className={styles.templateThumbWrap}>
+                                {tpl.thumbnail ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={tpl.thumbnail.startsWith('/') ? tpl.thumbnail : `/api/proxy?url=${encodeURIComponent(tpl.thumbnail)}`}
+                                    alt={tpl.name}
+                                    className={styles.templateThumb}
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className={styles.templateThumbPlaceholder}>{tpl.name[0]}</div>
+                                )}
+                                {selectedTemplateId === tpl.id && <div className={styles.templateCheckBadge}>✓</div>}
+                                {tpl.category && (
+                                  <div className={styles.templateCategoryBadge}>{tpl.category}</div>
+                                )}
+                              </div>
+                              <div className={styles.templateName}>{tpl.name}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 <div className={styles.formGroup}>
                   <label className={styles.modernLabel}>적용된 스타일</label>
                   <div className={`${styles.styleBadge} ${analyzing ? styles.pulse : ''}`}>
@@ -1030,10 +921,7 @@ export default function CardGenerator() {
                   <p className={styles.sectionDesc}>각 이미지를 클릭하면 확대해서 볼 수 있어요.</p>
                 </div>
                 <div className={styles.resultGrid}>
-                  {(resultImages.length === 6
-                    ? ['표지', '운영시간', '코스가격', '단품가격', '방문팁', 'CTA']
-                    : ['COVER', 'CONTENT', 'CLOSING']
-                  ).map((label, i) => (
+                  {['COVER'].map((label, i) => (
                     <div key={i} className={styles.resultCard}>
                       <span className={styles.resultLabel}>{label}</span>
                       {resultImages[i] ? (
@@ -1047,7 +935,7 @@ export default function CardGenerator() {
                           </a>
                           <a
                             href={resultImages[i]}
-                            download={`cardnews-${i + 1}-${label}.png`}
+                            download={`cardnews-${label.toLowerCase()}.png`}
                             className={styles.resultDownloadBtn}
                           >
                             ↓ 다운로드

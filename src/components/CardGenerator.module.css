@@ -1047,7 +1047,9 @@
 /* ── Portal banner ── */
 .portalBanner {
   display: flex;
-  padding: 10px 40px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 40px;
   background: linear-gradient(90deg, #f5f3ff, #ede9fe);
   border-bottom: 1px solid #ddd6fe;
   flex-shrink: 0;
@@ -1070,27 +1072,8 @@
   margin-left: 4px;
 }
 
-.portalBanner {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-  padding: 10px 40px;
-}
-
-.portalBannerRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.portalBannerActions {
-  display: flex;
-  gap: 6px;
-  margin-left: auto;
-}
-
 .portalBannerDownload {
+  margin-left: auto;
   padding: 5px 14px;
   font-size: 0.8rem;
   font-weight: 700;
@@ -1100,7 +1083,6 @@
   border-radius: 20px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
-  white-space: nowrap;
 }
 
 .portalBannerDownload:hover:not(:disabled) {
@@ -1111,71 +1093,6 @@
 .portalBannerDownload:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-/* 썸네일 스트립 */
-.portalThumbStrip {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: thin;
-}
-
-.portalThumbItem {
-  position: relative;
-  flex-shrink: 0;
-}
-
-.portalThumbImg {
-  width: 64px;
-  height: 64px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 2px solid #c4b5fd;
-  display: block;
-}
-
-.portalThumbRemove {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #ef4444;
-  color: #fff;
-  border: none;
-  font-size: 11px;
-  line-height: 18px;
-  text-align: center;
-  cursor: pointer;
-  padding: 0;
-  display: none;
-}
-
-.portalThumbItem:hover .portalThumbRemove {
-  display: block;
-}
-
-.portalThumbAdd {
-  flex-shrink: 0;
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
-  border: 2px dashed #c4b5fd;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #7c3aed;
-  font-size: 1.5rem;
-  transition: background 0.15s;
-}
-
-.portalThumbAdd:hover {
-  background: #ede9fe;
 }
 
 /* ── Stepper clickable ── */
