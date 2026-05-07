@@ -1,16 +1,16 @@
 :root {
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --primary-glow: rgba(99, 102, 241, 0.15);
-  
+  --primary: #f97316;
+  --primary-hover: #ea6c0a;
+  --primary-glow: rgba(249, 115, 22, 0.15);
+
   --secondary: #64748b;
   --secondary-hover: #475569;
-  
+
   --background: #f8fafc;
   --surface: #ffffff;
   --surface-hover: #f1f5f9;
   --surface-border: #e2e8f0;
-  --surface-glow: rgba(99, 102, 241, 0.05);
+  --surface-glow: rgba(249, 115, 22, 0.05);
   
   --text-primary: #0f172a;
   --text-secondary: #475569;
