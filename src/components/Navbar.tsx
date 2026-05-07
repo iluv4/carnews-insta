@@ -45,6 +45,17 @@ export default function Navbar() {
             <span className={styles.portalIcon}>📸</span> 감성 스튜디오
           </div>
         </div>
+
+        <div className={styles.navDivider}>글로벌 셀링</div>
+        <div className={styles.portalLinks}>
+          <div
+            className={`${styles.portalItem} ${activeTab === 'amazon' ? styles.activePortal : ''}`}
+            onClick={() => setActiveTab('amazon')}
+          >
+            <span className={styles.portalIcon}>🛒</span>
+            <span>아마존 셀링</span>
+          </div>
+        </div>
       </nav>
 
       <div className={styles.sidebarFooter}>

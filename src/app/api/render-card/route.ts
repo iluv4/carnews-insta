@@ -176,7 +176,8 @@ async function htmlToImage(html: string): Promise<string> {
   }
 
   let launchArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security'];
-  let headless: boolean | 'new' = true;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let headless: any = true;
 
   if (!executablePath) {
     const chromium = (await import('@sparticuz/chromium')).default;
@@ -185,12 +186,13 @@ async function htmlToImage(html: string): Promise<string> {
     headless = chromium.headless;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const browser = await puppeteer.launch({
     executablePath,
     headless,
     args: launchArgs,
     defaultViewport: null,
-  });
+  } as any);
 
   try {
     const page = await browser.newPage();
