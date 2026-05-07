@@ -914,7 +914,7 @@ export default function CardGenerator() {
                     <input
                       type="text"
                       className={styles.modernInput}
-                      placeholder="가게 이름 입력 (예: 소소한풍경)"
+                      placeholder="가게 이름 또는 naver.me/... URL"
                       value={naverBusinessName}
                       onChange={e => setNaverBusinessName(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleNaverPhotos()}
