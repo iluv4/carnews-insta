@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "src/app/api/render-card/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}

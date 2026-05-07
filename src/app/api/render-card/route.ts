@@ -175,15 +175,21 @@ async function htmlToImage(html: string): Promise<string> {
     if (fs.existsSync(p)) { executablePath = p; break; }
   }
 
-  if (!executablePath && process.env.NODE_ENV !== 'development') {
+  let launchArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security'];
+  let headless: boolean | 'new' = true;
+
+  if (!executablePath) {
     const chromium = (await import('@sparticuz/chromium')).default;
     executablePath = await chromium.executablePath();
+    launchArgs = chromium.args;
+    headless = chromium.headless;
   }
 
   const browser = await puppeteer.launch({
     executablePath,
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security'],
+    headless,
+    args: launchArgs,
+    defaultViewport: null,
   });
 
   try {
