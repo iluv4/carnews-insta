@@ -80,11 +80,12 @@ ${trimmedAnalysis}`.trim();
           prompt: slidePrompt.substring(0, 32000),
           n: 1,
           size: '1024x1536',
-          quality: 'high',
+          quality: 'medium',
+          output_format: 'jpeg',
         });
 
         const item = res.data?.[0] as any;
-        if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
+        if (item?.b64_json) return `data:image/jpeg;base64,${item.b64_json}`;
         if (item?.url) return item.url;
         throw new Error('gpt-image-2 edit 응답이 비어 있습니다.');
       }
