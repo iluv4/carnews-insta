@@ -176,10 +176,8 @@ async function htmlToImage(html: string): Promise<string> {
   }
 
   if (!executablePath && process.env.NODE_ENV !== 'development') {
-    const chromium = (await import('@sparticuz/chromium-min')).default;
-    const remoteTar = process.env.CHROMIUM_PATH ||
-      'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar';
-    executablePath = await chromium.executablePath(remoteTar);
+    const chromium = (await import('@sparticuz/chromium')).default;
+    executablePath = await chromium.executablePath();
   }
 
   const browser = await puppeteer.launch({

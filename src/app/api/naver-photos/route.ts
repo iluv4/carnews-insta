@@ -14,11 +14,9 @@ async function getChromePath(): Promise<string> {
   for (const p of chromePaths) {
     if (fs.existsSync(p)) return p;
   }
-  // Serverless fallback
-  const chromium = (await import('@sparticuz/chromium-min')).default;
-  const remoteTar = process.env.CHROMIUM_PATH ||
-    'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar';
-  return chromium.executablePath(remoteTar);
+  // Serverless fallback — full chromium package includes required shared libs
+  const chromium = (await import('@sparticuz/chromium')).default;
+  return chromium.executablePath();
 }
 
 async function scrapeNaverPhotos(businessName: string): Promise<string[]> {
