@@ -4,70 +4,70 @@ export const maxDuration = 30;
 
 const BROWSER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'application/json, text/plain, */*',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
-  'Referer': 'https://map.naver.com/',
+  'Referer': 'https://m.map.naver.com/',
 };
 
 // naver.me/xxx  또는  map.naver.com/.../place/12345  에서 placeId 추출
 async function placeIdFromUrl(input: string): Promise<string | null> {
-  // map.naver.com URL에서 바로 추출
   const directMatch = input.match(/place\/(\d+)/);
   if (directMatch) return directMatch[1];
 
-  // naver.me 단축 URL → 리다이렉트 따라가서 최종 URL에서 추출
-  if (input.includes('naver.me') || input.includes('naver.com')) {
-    try {
-      const res = await fetch(input, {
-        method: 'HEAD',
-        redirect: 'follow',
-        headers: { 'User-Agent': BROWSER_HEADERS['User-Agent'] },
-      });
-      const finalUrl = res.url;
-      const m = finalUrl.match(/place\/(\d+)/);
-      if (m) return m[1];
-    } catch {
-      // HEAD 안 되면 GET으로 재시도
-      const res = await fetch(input, {
-        redirect: 'follow',
-        headers: { 'User-Agent': BROWSER_HEADERS['User-Agent'] },
-      });
-      const m = res.url.match(/place\/(\d+)/);
-      if (m) return m[1];
-    }
-  }
+  // naver.me 단축 URL → 리다이렉트 따라가기
+  try {
+    const res = await fetch(input, {
+      redirect: 'follow',
+      headers: { 'User-Agent': BROWSER_HEADERS['User-Agent'] },
+    });
+    const m = res.url.match(/place\/(\d+)/);
+    if (m) return m[1];
+  } catch { /* ignore */ }
 
   return null;
 }
 
 async function getPlaceIdByName(businessName: string): Promise<string> {
-  const url = `https://map.naver.com/v5/api/search?caller=mnd&query=${encodeURIComponent(businessName)}&type=all&page=1&displayCount=3&lang=ko`;
-  const res = await fetch(url, { headers: BROWSER_HEADERS });
+  // m.place.naver.com 검색으로 placeId 추출
+  const searchUrl = `https://m.place.naver.com/place/search/list?query=${encodeURIComponent(businessName)}`;
+  const res = await fetch(searchUrl, { headers: BROWSER_HEADERS, redirect: 'follow' });
   if (!res.ok) throw new Error(`네이버 검색 실패 (${res.status})`);
 
-  const data = await res.json();
-  const placeId = data?.result?.place?.list?.[0]?.id;
+  const html = await res.text();
+  // 검색 결과 첫 번째 place ID 추출
+  const m = html.match(/\/place\/(\d+)|"id"\s*:\s*"(\d+)"/);
+  const placeId = m?.[1] ?? m?.[2];
   if (!placeId) throw new Error(`"${businessName}" 검색 결과를 찾을 수 없습니다.`);
   return placeId;
 }
 
 async function fetchPhotoUrls(placeId: string): Promise<string[]> {
-  const url = `https://pcmap.place.naver.com/place/${placeId}/photo`;
+  // m.place.naver.com 은 SSR로 사진 URL을 HTML에 포함 (pcmap은 SPA라 JS 필요)
+  const url = `https://m.place.naver.com/place/${placeId}/photo`;
   const res = await fetch(url, {
     headers: {
       ...BROWSER_HEADERS,
-      Referer: `https://map.naver.com/v5/entry/place/${placeId}`,
+      Referer: `https://m.map.naver.com/`,
     },
+    redirect: 'follow',
   });
   if (!res.ok) throw new Error(`사진 페이지 접근 실패 (${res.status})`);
 
   const html = await res.text();
 
-  const matches = html.match(/https:\/\/[^"'\s]*pstatic\.net\/[^"'\s]+/g) ?? [];
-  const unique = [...new Set(matches)].filter(
-    u => !u.includes('profile') && !u.includes('logo') && u.length > 60
-  );
-  return unique.slice(0, 12);
+  // search.pstatic.net 프록시 URL의 src= 파라미터에서 실제 ldb-phinf.pstatic.net URL 디코딩
+  const srcMatches = html.match(/src=https?%3A%2F%2Fldb-phinf\.pstatic\.net%2F[^&"'\s>]+/g) ?? [];
+  const decoded = srcMatches
+    .map(m => decodeURIComponent(m.replace(/^src=/, '')))
+    .filter(u => u.length > 60);
+
+  if (decoded.length > 0) {
+    return [...new Set(decoded)].slice(0, 12);
+  }
+
+  // fallback: search.pstatic.net URL 자체를 사용 (고화질 리사이즈 버전)
+  const fallback = html.match(/https:\/\/search\.pstatic\.net\/common\/[^"'\s>]+ldb-phinf[^"'\s>]+/g) ?? [];
+  return [...new Set(fallback)].slice(0, 12);
 }
 
 export async function POST(req: Request) {
@@ -78,8 +78,6 @@ export async function POST(req: Request) {
     }
 
     const input = businessName.trim();
-
-    // URL이면 placeId 직접 추출, 아니면 이름으로 검색
     const isUrl = input.startsWith('http') || input.includes('naver.me');
     let placeId: string;
 
