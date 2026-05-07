@@ -487,56 +487,28 @@ export default function CardGenerator() {
 
     try {
       const activePortal = CLIENT_PORTALS[activeTab];
-      const res = await fetch('/api/transform', {
+      const jsonlAnalysis = jsonlData || templates.find(t => t.id === selectedTemplateId)?.content || '';
+
+      setStatusText('🎨 카드 렌더링 중...');
+
+      const res = await fetch('/api/render-card', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          jsonlAnalysis: jsonlData || templates.find(t => t.id === selectedTemplateId)?.content,
           theme,
-          reference: generationMode,
+          jsonlAnalysis,
           referenceImageBase64: referenceImages[0] || '',
           clientContext: activePortal?.clientContext || '',
         }),
       });
 
-      if (!res.ok || !res.body) {
-        const err = await res.json().catch(() => ({ error: '생성 실패' }));
-        throw new Error(err.error);
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '생성 실패');
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      const labels = ['cover', 'content', 'closing'];
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        // Process complete SSE lines
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const event = JSON.parse(line.slice(6));
-          if (event.done) break;
-          if (typeof event.index === 'number' && event.url) {
-            setResultImages(prev => {
-              const next = [...prev];
-              next[event.index] = event.url;
-              return next;
-            });
-            // partial: blurry preview / final: sharp
-            setResultBlurLevels(prev => {
-              const next = [...prev];
-              next[event.index] = event.partial ? (event.blurLevel ?? 1) : 0;
-              return next;
-            });
-            if (!event.partial) setProgress(100);
-          }
-        }
+      if (data.url) {
+        setResultImages([data.url]);
+        setResultBlurLevels([0]);
+        setProgress(100);
       }
     } catch (err: any) {
       console.error(err);
