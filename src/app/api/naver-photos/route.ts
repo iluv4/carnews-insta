@@ -2,23 +2,17 @@ import { NextResponse } from 'next/server';
 
 export const maxDuration = 30;
 
-const BROWSER_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
-  'Referer': 'https://m.map.naver.com/',
-};
+const UA = 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
 
-// naver.me/xxx  또는  map.naver.com/.../place/12345  에서 placeId 추출
+// naver.me/xxx 또는 map.naver.com/.../place/12345 에서 placeId 추출
 async function placeIdFromUrl(input: string): Promise<string | null> {
-  const directMatch = input.match(/place\/(\d+)/);
-  if (directMatch) return directMatch[1];
+  const direct = input.match(/place\/(\d+)/);
+  if (direct) return direct[1];
 
-  // naver.me 단축 URL → 리다이렉트 따라가기
   try {
     const res = await fetch(input, {
       redirect: 'follow',
-      headers: { 'User-Agent': BROWSER_HEADERS['User-Agent'] },
+      headers: { 'User-Agent': UA },
     });
     const m = res.url.match(/place\/(\d+)/);
     if (m) return m[1];
@@ -27,47 +21,85 @@ async function placeIdFromUrl(input: string): Promise<string | null> {
   return null;
 }
 
-async function getPlaceIdByName(businessName: string): Promise<string> {
-  // m.place.naver.com 검색으로 placeId 추출
-  const searchUrl = `https://m.place.naver.com/place/search/list?query=${encodeURIComponent(businessName)}`;
-  const res = await fetch(searchUrl, { headers: BROWSER_HEADERS, redirect: 'follow' });
-  if (!res.ok) throw new Error(`네이버 검색 실패 (${res.status})`);
+// Naver bff-gateway GraphQL — 인증 없이 placeDetail.images 접근 가능
+async function fetchPhotosByPlaceId(placeId: string): Promise<string[]> {
+  const res = await fetch('https://bff-gateway.place.naver.com/graphql', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': UA,
+      'Referer': `https://m.place.naver.com/place/${placeId}/photo`,
+      'Origin': 'https://m.place.naver.com',
+    },
+    body: JSON.stringify({
+      query: `{
+        placeDetail(id: "${placeId}", deviceType: MOBILE) {
+          images {
+            images { origin width height }
+            total
+          }
+        }
+      }`,
+    }),
+  });
 
-  const html = await res.text();
-  // 검색 결과 첫 번째 place ID 추출
-  const m = html.match(/\/place\/(\d+)|"id"\s*:\s*"(\d+)"/);
-  const placeId = m?.[1] ?? m?.[2];
-  if (!placeId) throw new Error(`"${businessName}" 검색 결과를 찾을 수 없습니다.`);
-  return placeId;
+  if (!res.ok) throw new Error(`GraphQL 요청 실패 (${res.status})`);
+
+  const json = await res.json();
+  const images: Array<{ origin: string }> = json?.data?.placeDetail?.images?.images ?? [];
+
+  return images
+    .map(img => img.origin)
+    .filter(u => u && u.length > 20)
+    .slice(0, 12);
 }
 
-async function fetchPhotoUrls(placeId: string): Promise<string[]> {
-  // m.place.naver.com 은 SSR로 사진 URL을 HTML에 포함 (pcmap은 SPA라 JS 필요)
-  const url = `https://m.place.naver.com/place/${placeId}/photo`;
-  const res = await fetch(url, {
-    headers: {
-      ...BROWSER_HEADERS,
-      Referer: `https://m.map.naver.com/`,
-    },
-    redirect: 'follow',
-  });
-  if (!res.ok) throw new Error(`사진 페이지 접근 실패 (${res.status})`);
+// 이름 검색으로 placeId 찾기
+async function getPlaceIdByName(businessName: string): Promise<string> {
+  const res = await fetch(
+    `https://map.naver.com/v5/api/search?caller=mnd&query=${encodeURIComponent(businessName)}&type=place&page=1&displayCount=1&lang=ko`,
+    {
+      headers: {
+        'User-Agent': UA,
+        'Referer': 'https://map.naver.com/',
+        'Accept': 'application/json',
+      },
+    }
+  );
 
-  const html = await res.text();
-
-  // search.pstatic.net 프록시 URL의 src= 파라미터에서 실제 ldb-phinf.pstatic.net URL 디코딩
-  const srcMatches = html.match(/src=https?%3A%2F%2Fldb-phinf\.pstatic\.net%2F[^&"'\s>]+/g) ?? [];
-  const decoded = srcMatches
-    .map(m => decodeURIComponent(m.replace(/^src=/, '')))
-    .filter(u => u.length > 60);
-
-  if (decoded.length > 0) {
-    return [...new Set(decoded)].slice(0, 12);
+  if (res.ok) {
+    const data = await res.json();
+    const id = data?.result?.place?.list?.[0]?.id;
+    if (id) return id;
   }
 
-  // fallback: search.pstatic.net URL 자체를 사용 (고화질 리사이즈 버전)
-  const fallback = html.match(/https:\/\/search\.pstatic\.net\/common\/[^"'\s>]+ldb-phinf[^"'\s>]+/g) ?? [];
-  return [...new Set(fallback)].slice(0, 12);
+  // fallback: bff-gateway searchPlace GraphQL
+  const gqlRes = await fetch('https://bff-gateway.place.naver.com/graphql', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': UA,
+      'Referer': 'https://m.place.naver.com/',
+      'Origin': 'https://m.place.naver.com',
+    },
+    body: JSON.stringify({
+      query: `{
+        search(query: "${businessName}", displayCount: 1) {
+          businesses {
+            items { id name }
+          }
+        }
+      }`,
+    }),
+  });
+
+  if (gqlRes.ok) {
+    const gqlData = await gqlRes.json();
+    const id = gqlData?.data?.search?.businesses?.items?.[0]?.id;
+    if (id) return id;
+  }
+
+  throw new Error(`"${businessName}" 검색 결과를 찾을 수 없습니다. 네이버 지도 URL을 직접 붙여넣어 주세요.`);
 }
 
 export async function POST(req: Request) {
@@ -89,11 +121,11 @@ export async function POST(req: Request) {
       placeId = await getPlaceIdByName(input);
     }
 
-    const photos = await fetchPhotoUrls(placeId);
+    const photos = await fetchPhotosByPlaceId(placeId);
 
     if (photos.length === 0) {
       return NextResponse.json(
-        { error: '사진을 찾을 수 없습니다. 정확한 가게 이름이나 URL을 입력해주세요.' },
+        { error: '사진을 찾을 수 없습니다.' },
         { status: 404 }
       );
     }
