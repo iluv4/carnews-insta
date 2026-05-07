@@ -698,6 +698,80 @@
     flex: 1;
     width: 100%;
   }
+  /* Mobile layout */
+  .header {
+    padding: 12px 16px;
+  }
+  .container {
+    height: auto;
+    overflow: visible;
+  }
+  .content {
+    padding: 0 16px 24px 16px;
+  }
+  .scrollArea {
+    overflow-y: visible;
+  }
+  .wizardCard {
+    padding: 20px 16px;
+  }
+  /* Prevent iOS zoom on input focus */
+  .modernInput {
+    font-size: 16px;
+  }
+  .textarea {
+    font-size: 16px;
+  }
+  /* Stack URL input vertically */
+  .urlInputContainer {
+    flex-direction: column;
+    padding: 12px;
+    gap: 10px;
+  }
+  .inputWrapper {
+    width: 100%;
+    padding-left: 8px;
+  }
+  .modernBtn {
+    width: 100%;
+    padding: 14px;
+    text-align: center;
+  }
+  /* Naver photo row stack */
+  .naverPhotoRow {
+    flex-wrap: wrap;
+  }
+  .naverPhotoRow .modernBtn {
+    width: 100%;
+    padding: 10px 16px;
+  }
+  /* Result grid: 2 columns on mobile */
+  .resultGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  /* Chip grid: 2 columns */
+  .chipGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* Portal banner */
+  .portalBanner {
+    padding: 10px 16px;
+  }
+  /* Toast above bottom nav */
+  .toast {
+    bottom: 80px;
+    right: 16px;
+    left: 16px;
+    text-align: center;
+  }
+  /* Content header */
+  .contentHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 0;
+  }
 }
 
 .actionGroup {

@@ -156,6 +156,9 @@
   transition: all 0.2s;
   text-decoration: none;
   box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
 }
 .heroCta:hover { background: #FF5C28; transform: translateY(-2px); }
 .heroCtaGhost {
@@ -707,6 +710,9 @@
   transition: all 0.2s;
   text-decoration: none;
   box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
 }
 .finalBtn:hover { transform: translateY(-2px) scale(1.02); }
 
