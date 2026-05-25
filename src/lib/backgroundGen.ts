@@ -37,7 +37,10 @@ interface ReplicatePrediction {
   status: 'starting' | 'processing' | 'succeeded' | 'failed' | 'canceled';
   output?: string | string[] | null;
   error?: string | null;
+  urls?: { get?: string };
 }
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function firstUrl(output: ReplicatePrediction['output']): string | null {
   if (typeof output === 'string') return output;
@@ -80,9 +83,25 @@ export async function generateBackground(theme: string): Promise<BackgroundGenRe
       signal: AbortSignal.timeout(45_000),
     });
 
-    const prediction = (await res.json()) as ReplicatePrediction;
-    if (!res.ok || prediction.status === 'failed' || prediction.status === 'canceled') {
+    let prediction = (await res.json()) as ReplicatePrediction;
+    if (!res.ok) {
       return { ok: false, reason: 'failed', error: prediction.error || `Replicate returned ${res.status}` };
+    }
+
+    // Prefer=wait usually returns a terminal status, but if it comes back still
+    // running, poll the prediction URL until it resolves (within ~30s).
+    const deadline = Date.now() + 30_000;
+    while ((prediction.status === 'starting' || prediction.status === 'processing') && prediction.urls?.get && Date.now() < deadline) {
+      await sleep(1500);
+      const poll = await fetch(prediction.urls.get, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(10_000),
+      });
+      prediction = (await poll.json()) as ReplicatePrediction;
+    }
+
+    if (prediction.status !== 'succeeded') {
+      return { ok: false, reason: 'failed', error: prediction.error || `Replicate status: ${prediction.status}` };
     }
 
     const url = firstUrl(prediction.output);

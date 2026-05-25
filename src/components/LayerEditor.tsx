@@ -333,7 +333,7 @@ function renderLayer(layer: Layer, o: RenderOpts): React.ReactNode {
           suppressContentEditableWarning
           onPointerDown={(e) => o.onPointerDown(e, layer)}
           onDoubleClick={o.onStartEdit}
-          onBlur={(e) => o.isEditing && o.onCommitText(e.currentTarget.textContent ?? '')}
+          onBlur={(e) => o.isEditing && o.onCommitText((e.currentTarget.innerText ?? '').replace(/\n$/, ''))}
           style={{
             position: 'absolute',
             left: layer.bbox.x * scale,

@@ -69,6 +69,23 @@ ${SCHEMA_SPEC}`;
       }
     }
 
+    // The schema validator only checks structural fields, so backfill render
+    // fields the model may omit — otherwise they'd render as `color:undefined`
+    // / `font-size:undefinedpx` (invisible or mis-sized text).
+    if (Array.isArray(parsed.layers)) {
+      for (const l of parsed.layers) {
+        if (l.type === 'text') {
+          if (typeof l.color !== 'string') l.color = '#ffffff';
+          if (l.fontWeight == null) l.fontWeight = 700;
+          if (!Number.isFinite(l.fontSize as number)) l.fontSize = 64;
+          if (!l.align) l.align = 'left';
+          l.editable = true;
+        } else if (l.type === 'shape' && !l.shape) {
+          l.shape = 'rect';
+        }
+      }
+    }
+
     const valid = validateLayerDocument(parsed);
     if (!valid.ok) {
       console.warn('[layerGenerator] invalid generated document:', valid.error);
