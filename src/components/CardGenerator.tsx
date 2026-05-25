@@ -6,6 +6,8 @@ import TemplateCard from './TemplateCard';
 import { useSession, signIn } from 'next-auth/react';
 import { useTab } from '@/context/TabContext';
 import PortalDashboard from './PortalDashboard';
+import LayerEditor from './LayerEditor';
+import type { LayerDocument } from '@/lib/layerSchema';
 
 
 interface Template {
@@ -130,6 +132,7 @@ export default function CardGenerator() {
   const [jsonlData, setJsonlData] = useState('');
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [resultImages, setResultImages] = useState<string[]>([]);
+  const [layerDocument, setLayerDocument] = useState<LayerDocument | null>(null);
   const [resultBlurLevels, setResultBlurLevels] = useState<number[]>([0]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [theme, setTheme] = useState('');
@@ -552,6 +555,9 @@ export default function CardGenerator() {
         setResultBlurLevels([0]);
         setProgress(100);
       }
+      if (data.layerDocument) {
+        setLayerDocument(data.layerDocument as LayerDocument);
+      }
     } catch (err: any) {
       console.error(err);
       setStatusText(`오류: ${err.message}`);
@@ -959,8 +965,15 @@ export default function CardGenerator() {
               <div className={styles.wizardCard}>
                 <div className={styles.sectionHeader}>
                   <h2 className={styles.sectionTitle}>생성 완료 🎉</h2>
-                  <p className={styles.sectionDesc}>각 이미지를 클릭하면 확대해서 볼 수 있어요.</p>
+                  <p className={styles.sectionDesc}>
+                    {layerDocument
+                      ? '텍스트를 클릭해 바로 수정한 뒤 고화질로 저장하세요.'
+                      : '각 이미지를 클릭하면 확대해서 볼 수 있어요.'}
+                  </p>
                 </div>
+                {layerDocument && !resultBlurLevels[0] ? (
+                  <LayerEditor document={layerDocument} />
+                ) : (
                 <div className={styles.resultGrid}>
                   {['COVER'].map((label, i) => (
                     <div key={i} className={styles.resultCard}>
@@ -1000,6 +1013,7 @@ export default function CardGenerator() {
                     </div>
                   ))}
                 </div>
+                )}
                 <div className={styles.actionGroup} style={{ marginTop: '32px' }}>
                   <button className="btn-secondary" onClick={() => setCurrentStep(2)}>← 다시 생성하기</button>
                 </div>
