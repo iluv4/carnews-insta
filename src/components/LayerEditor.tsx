@@ -89,13 +89,19 @@ export default function LayerEditor({ document: initialDoc, previewWidth = 360, 
     try {
       const node = previewRef.current;
       if (!node) throw new Error('미리보기를 찾을 수 없습니다');
+      // Ensure web fonts are loaded so Korean text isn't captured as fallback.
+      if (window.document.fonts?.ready) await window.document.fonts.ready;
       // Capture at full canvas resolution: the node is scaled down for preview,
       // so up-scale by the inverse of the preview scale.
-      const dataUrl = await toJpeg(node, {
+      const opts = {
         quality: 0.95,
         pixelRatio: doc.canvas.w / node.offsetWidth,
         cacheBust: true,
-      });
+      };
+      // First capture warms html-to-image's font/image inlining; the first call
+      // can yield a blank/partial image, so the second is the one we keep.
+      await toJpeg(node, opts);
+      const dataUrl = await toJpeg(node, opts);
       const a = window.document.createElement('a');
       a.href = dataUrl;
       a.download = `cardnews-${Date.now()}.jpg`;
