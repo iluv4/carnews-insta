@@ -11,7 +11,7 @@ const openai = new OpenAI({
 export async function POST(req: Request) {
   try {
     const { jsonlAnalysis, theme, reference, referenceImageBase64, jobId, clientContext } = await req.json();
-    if (jobId) createJob(jobId, 1, theme || '');
+    if (jobId) await createJob(jobId, 1, theme || '');
 
     if (!jsonlAnalysis) {
       return NextResponse.json({ error: 'JSONL Analysis data is required' }, { status: 400 });
@@ -119,11 +119,11 @@ ${trimmedAnalysis}`.trim();
 
           if (!finalUrl) throw new Error('이미지 생성 결과가 없습니다.');
 
-          if (jobId) updateJobSlide(jobId, 0, { url: finalUrl });
+          if (jobId) await updateJobSlide(jobId, 0, { url: finalUrl });
           send({ index: 0, url: finalUrl });
 
         } catch (e: any) {
-          if (jobId) updateJobSlide(jobId, 0, { error: e.message });
+          if (jobId) await updateJobSlide(jobId, 0, { error: e.message });
           send({ index: 0, error: e.message });
         }
 
