@@ -16,8 +16,10 @@ export interface BaseLayer {
 
 export interface BackgroundLayer extends BaseLayer {
   type: 'background';
-  source: 'image' | 'gradient' | 'solid';
-  // image: data/remote URL, gradient: CSS gradient string, solid: hex
+  // 'ai' is an AI-generated (text-free) image; rendered identically to 'image'
+  // but tracked separately so the UI can show provenance / offer regeneration.
+  source: 'image' | 'gradient' | 'solid' | 'ai';
+  // image/ai: data/remote URL, gradient: CSS gradient string, solid: hex
   value: string;
   overlayOpacity?: number;
 }

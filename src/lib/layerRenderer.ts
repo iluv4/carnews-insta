@@ -24,11 +24,9 @@ function renderLayer(layer: Layer): string {
     case 'background': {
       const l = layer as BackgroundLayer;
       const base =
-        l.source === 'image'
+        l.source === 'image' || l.source === 'ai'
           ? `background:url('${l.value}') center/cover no-repeat;`
-          : l.source === 'gradient'
-            ? `background:${l.value};`
-            : `background:${l.value};`;
+          : `background:${l.value};`;
       const overlay =
         l.overlayOpacity && l.overlayOpacity > 0
           ? `<div style="position:absolute;inset:0;z-index:${l.z + 1};background:linear-gradient(to bottom,rgba(0,0,0,0.05) 0%,rgba(0,0,0,${l.overlayOpacity * 0.4}) 50%,rgba(0,0,0,${l.overlayOpacity + 0.2}) 100%);"></div>`

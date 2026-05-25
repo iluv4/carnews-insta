@@ -3,8 +3,9 @@ import OpenAI from 'openai';
 import { parseDNA, buildCardLayerDocument } from '@/lib/layerBuilder';
 import { generateLayerDocument } from '@/lib/layerGenerator';
 import { layerDocumentToHtml } from '@/lib/layerRenderer';
-import { validateLayerDocument } from '@/lib/layerSchema';
+import { validateLayerDocument, CANVAS_W, CANVAS_H } from '@/lib/layerSchema';
 import { htmlToImage } from '@/lib/puppeteerShot';
+import { generateBackground } from '@/lib/backgroundGen';
 
 export const maxDuration = 60;
 
@@ -46,7 +47,7 @@ JSON으로만 응답:
 // ── Route handler ─────────────────────────────────────────────────────────────
 export async function POST(req: Request) {
   try {
-    const { theme, jsonlAnalysis, clientContext, referenceImageBase64 } = await req.json();
+    const { theme, jsonlAnalysis, clientContext, referenceImageBase64, useAiBackground } = await req.json();
 
     if (!theme) return NextResponse.json({ error: 'theme is required' }, { status: 400 });
 
@@ -79,6 +80,23 @@ export async function POST(req: Request) {
       });
     }
 
+    // Optional Phase 2: swap in a text-free AI background. Korean copy stays as
+    // editable text layers on top. Silently skipped if the provider is not
+    // configured or generation fails, so the base flow is never blocked.
+    if (useAiBackground) {
+      const bg = await generateBackground(theme);
+      if (bg.ok) {
+        const existing = layerDocument.layers.find((l) => l.type === 'background');
+        if (existing && existing.type === 'background') {
+          existing.source = 'ai';
+          existing.value = bg.url;
+        } else {
+          layerDocument.layers.unshift({ id: 'bg', type: 'background', source: 'ai', value: bg.url, overlayOpacity: 0.45, z: 0 });
+          layerDocument.canvas = { w: CANVAS_W, h: CANVAS_H };
+        }
+      }
+    }
+
     const valid = validateLayerDocument(layerDocument);
     if (!valid.ok) {
       return NextResponse.json({ error: `invalid layer document: ${valid.error}` }, { status: 500 });
@@ -90,8 +108,9 @@ export async function POST(req: Request) {
     // client can re-render after the user edits individual layers.
     return NextResponse.json({ url, layerDocument });
 
-  } catch (err: any) {
-    console.error('[render-card]', err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[render-card]', message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

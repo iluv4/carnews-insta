@@ -220,7 +220,7 @@ function renderLayer(layer: Layer, o: RenderOpts): React.ReactNode {
   switch (layer.type) {
     case 'background': {
       const bg =
-        layer.source === 'image'
+        layer.source === 'image' || layer.source === 'ai'
           ? { backgroundImage: `url('${layer.value}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
           : { background: layer.value };
       return (
