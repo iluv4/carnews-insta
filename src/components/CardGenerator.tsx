@@ -1001,7 +1001,7 @@ export default function CardGenerator() {
                   </p>
                 </div>
                 {layerDocument && !resultBlurLevels[0] ? (
-                  <LayerEditor document={layerDocument} />
+                  <LayerEditor document={layerDocument} theme={theme} />
                 ) : (
                 <div className={styles.resultGrid}>
                   {['COVER'].map((label, i) => (

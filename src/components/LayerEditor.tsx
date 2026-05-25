@@ -14,13 +14,15 @@ type DragState = { id: string; startX: number; startY: number; origX: number; or
 interface Props {
   document: LayerDocument;
   previewWidth?: number;
+  theme?: string;
 }
 
-export default function LayerEditor({ document: initialDoc, previewWidth = 360 }: Props) {
+export default function LayerEditor({ document: initialDoc, previewWidth = 360, theme }: Props) {
   const [doc, setDoc] = useState<LayerDocument>(initialDoc);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState('');
 
   const scale = previewWidth / doc.canvas.w;
@@ -87,6 +89,32 @@ export default function LayerEditor({ document: initialDoc, previewWidth = 360 }
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Re-roll the AI background for the current theme, keeping all text layers.
+  const regenerateBackground = async () => {
+    if (!theme) return;
+    setRegenerating(true);
+    setError('');
+    try {
+      const res = await fetch('/api/generate-background', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '배경 생성 실패');
+      const bg = doc.layers.find((l) => l.type === 'background');
+      if (bg) {
+        patchLayer(bg.id, { source: 'ai', value: data.url } as Partial<Layer>);
+      } else {
+        setDoc((d) => ({ ...d, layers: [{ id: 'bg', type: 'background', source: 'ai', value: data.url, overlayOpacity: 0.45, z: 0 }, ...d.layers] }));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -165,22 +193,43 @@ export default function LayerEditor({ document: initialDoc, previewWidth = 360 }
         💡 레이어를 드래그해 옮기고, 텍스트는 더블클릭해 수정하세요. 칩으로 레이어를 켜고 끌 수 있어요.
       </p>
 
-      <button
-        onClick={handleExport}
-        disabled={saving}
-        style={{
-          padding: '12px 28px',
-          borderRadius: 10,
-          border: 'none',
-          background: saving ? '#999' : '#ff6b35',
-          color: '#fff',
-          fontWeight: 700,
-          fontSize: 15,
-          cursor: saving ? 'default' : 'pointer',
-        }}
-      >
-        {saving ? '고화질 렌더링 중…' : '✨ 고화질로 저장하기'}
-      </button>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {theme && (
+          <button
+            onClick={regenerateBackground}
+            disabled={regenerating || saving}
+            style={{
+              padding: '12px 22px',
+              borderRadius: 10,
+              border: '1px solid #ff6b35',
+              background: '#fff',
+              color: '#ff6b35',
+              fontWeight: 700,
+              fontSize: 15,
+              cursor: regenerating || saving ? 'default' : 'pointer',
+              opacity: regenerating || saving ? 0.6 : 1,
+            }}
+          >
+            {regenerating ? '배경 생성 중…' : '🔄 AI 배경 다시 생성'}
+          </button>
+        )}
+        <button
+          onClick={handleExport}
+          disabled={saving || regenerating}
+          style={{
+            padding: '12px 28px',
+            borderRadius: 10,
+            border: 'none',
+            background: saving ? '#999' : '#ff6b35',
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: 15,
+            cursor: saving || regenerating ? 'default' : 'pointer',
+          }}
+        >
+          {saving ? '고화질 렌더링 중…' : '✨ 고화질로 저장하기'}
+        </button>
+      </div>
       {error && <p style={{ color: '#d33', fontSize: 13 }}>{error}</p>}
     </div>
   );
