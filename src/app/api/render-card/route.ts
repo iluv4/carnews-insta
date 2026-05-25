@@ -177,7 +177,10 @@ async function htmlToImage(html: string): Promise<string> {
     if (p && fs.existsSync(p)) { executablePath = p; break; }
   }
 
-  let launchArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security'];
+  // --user-data-dir points crashpad at a writable dir; without it Chrome's
+  // crash handler aborts ("--database is required") when running as a non-root
+  // container user with no writable HOME.
+  let launchArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--disable-gpu', '--user-data-dir=/tmp/chrome'];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let headless: any = true;
 
