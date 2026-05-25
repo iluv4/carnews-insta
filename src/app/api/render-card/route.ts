@@ -1,37 +1,13 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { parseDNA, buildCardLayerDocument } from '@/lib/layerBuilder';
+import { layerDocumentToHtml } from '@/lib/layerRenderer';
+import { validateLayerDocument } from '@/lib/layerSchema';
+import { htmlToImage } from '@/lib/puppeteerShot';
 
 export const maxDuration = 60;
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'dummy_key' });
-
-// ── Extract key style values from design DNA JSONL ────────────────────────────
-function parseDNA(jsonl: string): {
-  bgColor: string;
-  textColor: string;
-  accentColor: string;
-  overlayOpacity: number;
-  fontWeight: string;
-} {
-  const defaults = { bgColor: '#111111', textColor: '#ffffff', accentColor: '#ff6b35', overlayOpacity: 0.55, fontWeight: '800' };
-  try {
-    const lines = jsonl.split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-    const palette = lines.find((l: any) => l.type === 'color_palette');
-    const bg = lines.find((l: any) => l.type === 'background_dna');
-    const typo = lines.find((l: any) => l.type === 'typography_dna');
-
-    const colors: string[] = palette?.colors ?? [];
-    return {
-      bgColor: bg?.primary ?? colors[0] ?? defaults.bgColor,
-      textColor: typo?.primary_color ?? colors.find((c: string) => /fff|white/i.test(c)) ?? defaults.textColor,
-      accentColor: typo?.accent_color ?? colors[1] ?? defaults.accentColor,
-      overlayOpacity: bg?.texture?.includes('glass') ? 0.4 : 0.55,
-      fontWeight: typo?.weight ?? defaults.fontWeight,
-    };
-  } catch {
-    return defaults;
-  }
-}
 
 // ── Generate Korean card copy via gpt-4.1-mini ────────────────────────────────
 async function generateCopy(theme: string, clientContext: string): Promise<{
@@ -66,145 +42,6 @@ JSON으로만 응답:
   }
 }
 
-// ── Build HTML card ───────────────────────────────────────────────────────────
-function buildHtml(params: {
-  headline: string;
-  subheadline: string;
-  badge: string;
-  bgColor: string;
-  textColor: string;
-  accentColor: string;
-  overlayOpacity: number;
-  fontWeight: string;
-  photoBase64?: string;
-}): string {
-  const { headline, subheadline, badge, bgColor, textColor, accentColor, overlayOpacity, fontWeight, photoBase64 } = params;
-  const bgStyle = photoBase64
-    ? `background: url('${photoBase64}') center/cover no-repeat;`
-    : `background: ${bgColor};`;
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 1024px; height: 1536px; overflow: hidden; }
-  .card {
-    width: 1024px; height: 1536px;
-    position: relative;
-    ${bgStyle}
-    font-family: 'Noto Sans KR', sans-serif;
-  }
-  .overlay {
-    position: absolute; inset: 0;
-    background: linear-gradient(
-      to bottom,
-      rgba(0,0,0,0.05) 0%,
-      rgba(0,0,0,${overlayOpacity * 0.4}) 50%,
-      rgba(0,0,0,${overlayOpacity + 0.2}) 100%
-    );
-  }
-  .badge {
-    position: absolute; top: 48px; right: 48px;
-    background: ${bgColor};
-    color: ${accentColor};
-    font-size: 36px; font-weight: 900;
-    padding: 20px 28px;
-    border-radius: 50%;
-    width: 140px; height: 140px;
-    display: flex; align-items: center; justify-content: center;
-    text-align: center; line-height: 1.2;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-  }
-  .text-area {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    padding: 60px 60px 80px;
-  }
-  .subheadline {
-    font-size: 36px; font-weight: 400;
-    color: ${textColor};
-    opacity: 0.85;
-    margin-bottom: 16px;
-    letter-spacing: -0.5px;
-  }
-  .headline {
-    font-size: 96px; font-weight: ${fontWeight};
-    color: ${textColor};
-    line-height: 1.15;
-    letter-spacing: -2px;
-    text-shadow: 0 2px 12px rgba(0,0,0,0.5);
-    word-break: keep-all;
-  }
-  .accent-line {
-    width: 80px; height: 6px;
-    background: ${accentColor};
-    border-radius: 3px;
-    margin-top: 32px;
-  }
-</style>
-</head>
-<body>
-<div class="card">
-  <div class="overlay"></div>
-  <div class="badge">${badge}</div>
-  <div class="text-area">
-    <div class="subheadline">${subheadline}</div>
-    <div class="headline">${headline}</div>
-    <div class="accent-line"></div>
-  </div>
-</div>
-</body>
-</html>`;
-}
-
-// ── Puppeteer screenshot ──────────────────────────────────────────────────────
-async function htmlToImage(html: string): Promise<string> {
-  const puppeteer = (await import('puppeteer-core')).default;
-  const chromePaths = [
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium-browser',
-  ];
-  const fs = await import('fs');
-  let executablePath = '';
-  for (const p of chromePaths) {
-    if (fs.existsSync(p)) { executablePath = p; break; }
-  }
-
-  let launchArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security'];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let headless: any = true;
-
-  if (!executablePath) {
-    const chromium = (await import('@sparticuz/chromium')).default;
-    executablePath = await chromium.executablePath();
-    launchArgs = chromium.args;
-    headless = chromium.headless;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const browser = await puppeteer.launch({
-    executablePath,
-    headless,
-    args: launchArgs,
-    defaultViewport: null,
-  } as any);
-
-  try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1024, height: 1536, deviceScaleFactor: 1 });
-    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 15000 });
-    const buffer = await page.screenshot({ type: 'jpeg', quality: 90, fullPage: false });
-    return `data:image/jpeg;base64,${Buffer.from(buffer).toString('base64')}`;
-  } finally {
-    await browser.close();
-  }
-}
-
 // ── Route handler ─────────────────────────────────────────────────────────────
 export async function POST(req: Request) {
   try {
@@ -222,18 +59,24 @@ export async function POST(req: Request) {
     }
 
     const style = parseDNA(jsonlAnalysis ?? '');
-    const [copy] = await Promise.all([
-      generateCopy(theme, clientContext ?? ''),
-    ]);
+    const copy = await generateCopy(theme, clientContext ?? '');
 
-    const html = buildHtml({
-      ...copy,
-      ...style,
-      photoBase64: referenceImageBase64 || undefined,
+    const layerDocument = buildCardLayerDocument({
+      style,
+      copy,
+      photoSrc: referenceImageBase64 || undefined,
     });
 
+    const valid = validateLayerDocument(layerDocument);
+    if (!valid.ok) {
+      return NextResponse.json({ error: `invalid layer document: ${valid.error}` }, { status: 500 });
+    }
+
+    const html = layerDocumentToHtml(layerDocument);
     const url = await htmlToImage(html);
-    return NextResponse.json({ url });
+    // Return the editable layer tree alongside the rendered preview so the
+    // client can re-render after the user edits individual layers.
+    return NextResponse.json({ url, layerDocument });
 
   } catch (err: any) {
     console.error('[render-card]', err.message);
