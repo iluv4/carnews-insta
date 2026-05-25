@@ -6,10 +6,20 @@
 // text editing (double-click), and font-size/color tweaks. The server
 // (/api/render-layers) is only called for the final high-res export on save.
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { toJpeg } from 'html-to-image';
 import type { LayerDocument, Layer, TextLayer } from '@/lib/layerSchema';
 
 type DragState = { id: string; startX: number; startY: number; origX: number; origY: number };
+
+// Route remote images through our same-origin proxy so the export canvas is
+// not tainted by cross-origin sources (AI backgrounds, Naver photos, …).
+// data: URIs and same-origin paths are left untouched.
+function proxied(url: string): string {
+  if (!url || url.startsWith('data:') || url.startsWith('/')) return url;
+  if (/^https?:\/\//i.test(url)) return `/api/proxy?url=${encodeURIComponent(url)}`;
+  return url;
+}
 
 interface Props {
   document: LayerDocument;
@@ -31,6 +41,7 @@ export default function LayerEditor({ document: initialDoc, previewWidth = 360, 
   const selected = doc.layers.find((l) => l.id === selectedId) ?? null;
 
   const [drag, setDrag] = useState<DragState | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   const patchLayer = (id: string, partial: Partial<Layer>) => {
     setDoc((d) => ({
@@ -73,16 +84,20 @@ export default function LayerEditor({ document: initialDoc, previewWidth = 360, 
     setError('');
     setSelectedId(null);
     setEditingId(null);
+    // Let the deselect re-render commit before capturing (drops selection outline).
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
     try {
-      const res = await fetch('/api/render-layers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ layerDocument: doc }),
+      const node = previewRef.current;
+      if (!node) throw new Error('미리보기를 찾을 수 없습니다');
+      // Capture at full canvas resolution: the node is scaled down for preview,
+      // so up-scale by the inverse of the preview scale.
+      const dataUrl = await toJpeg(node, {
+        quality: 0.95,
+        pixelRatio: doc.canvas.w / node.offsetWidth,
+        cacheBust: true,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '저장 실패');
       const a = window.document.createElement('a');
-      a.href = data.url;
+      a.href = dataUrl;
       a.download = `cardnews-${Date.now()}.jpg`;
       a.click();
     } catch (e) {
@@ -121,6 +136,7 @@ export default function LayerEditor({ document: initialDoc, previewWidth = 360, 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center' }}>
       <div
+        ref={previewRef}
         onPointerMove={onLayerPointerMove}
         onPointerUp={onLayerPointerUp}
         onClick={(e) => { if (e.target === e.currentTarget) { setSelectedId(null); setEditingId(null); } }}
@@ -270,7 +286,7 @@ function renderLayer(layer: Layer, o: RenderOpts): React.ReactNode {
     case 'background': {
       const bg =
         layer.source === 'image' || layer.source === 'ai'
-          ? { backgroundImage: `url('${layer.value}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          ? { backgroundImage: `url('${proxied(layer.value)}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
           : { background: layer.value };
       return (
         <React.Fragment key={layer.id}>
@@ -300,7 +316,7 @@ function renderLayer(layer: Layer, o: RenderOpts): React.ReactNode {
             width: layer.bbox.w * scale,
             height: layer.bbox.h * scale,
             zIndex: z,
-            backgroundImage: `url('${layer.src}')`,
+            backgroundImage: `url('${proxied(layer.src)}')`,
             backgroundSize: layer.fit ?? 'cover',
             backgroundPosition: 'center',
             borderRadius: (layer.radius ?? 0) * scale,

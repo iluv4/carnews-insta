@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { parseDNA, buildCardLayerDocument } from '@/lib/layerBuilder';
 import { generateLayerDocument } from '@/lib/layerGenerator';
-import { layerDocumentToHtml } from '@/lib/layerRenderer';
 import { validateLayerDocument, CANVAS_W, CANVAS_H } from '@/lib/layerSchema';
-import { htmlToImage } from '@/lib/puppeteerShot';
 import { generateBackground } from '@/lib/backgroundGen';
 
 export const maxDuration = 60;
@@ -107,11 +105,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `invalid layer document: ${valid.error}` }, { status: 500 });
     }
 
-    const html = layerDocumentToHtml(layerDocument);
-    const url = await htmlToImage(html);
-    // Return the editable layer tree alongside the rendered preview so the
-    // client can re-render after the user edits individual layers.
-    return NextResponse.json({ url, layerDocument });
+    // Return the editable layer tree only. The client renders the preview and
+    // the final high-res export from the DOM (html-to-image) — no server-side
+    // headless Chrome, which is unreliable on Vercel serverless.
+    return NextResponse.json({ layerDocument });
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
