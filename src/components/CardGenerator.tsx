@@ -136,6 +136,7 @@ export default function CardGenerator() {
   const [resultBlurLevels, setResultBlurLevels] = useState<number[]>([0]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [theme, setTheme] = useState('');
+  const [useAiBackground, setUseAiBackground] = useState(false);
   const [generationMode, setGenerationMode] = useState<'creative' | 'strict'>('creative');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -544,6 +545,7 @@ export default function CardGenerator() {
           jsonlAnalysis,
           referenceImageBase64: referenceImages[0] || '',
           clientContext: activePortal?.clientContext || '',
+          useAiBackground,
         }),
       });
 
@@ -876,6 +878,33 @@ export default function CardGenerator() {
                   onChange={(e) => setTheme(e.target.value)}
                   placeholder={CLIENT_PORTALS[activeTab]?.placeholder || '카드뉴스에 담을 내용을 입력하세요...'}
                 />
+
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    padding: '12px 14px',
+                    margin: '12px 0',
+                    borderRadius: 10,
+                    border: `1px solid ${useAiBackground ? '#ff6b35' : '#e2e8f0'}`,
+                    background: useAiBackground ? '#fff5ef' : '#fff',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={useAiBackground}
+                    onChange={(e) => setUseAiBackground(e.target.checked)}
+                    style={{ marginTop: 2, accentColor: '#ff6b35' }}
+                  />
+                  <span style={{ fontSize: 14, lineHeight: 1.5 }}>
+                    <strong>✨ AI 배경 생성</strong>
+                    <span style={{ display: 'block', color: '#64748b', fontSize: 12.5, marginTop: 2 }}>
+                      주제에 맞는 배경 이미지를 AI가 새로 만듭니다. 글자는 그대로 편집할 수 있어요.
+                    </span>
+                  </span>
+                </label>
 
                 <div className={styles.formGroup}>
                   <label className={styles.modernLabel}>
