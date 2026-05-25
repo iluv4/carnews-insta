@@ -14,7 +14,12 @@ RUN npm ci
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# `npm run build` runs `prisma generate && next build`
+# `npm run build` runs `prisma generate && next build`.
+# prisma.config.ts requires DATABASE_POSTGRES_PRISMA_URL to load; `prisma
+# generate` never connects, so a placeholder is enough at build time. The
+# real connection string is injected at runtime via Railway env vars.
+ENV DATABASE_POSTGRES_PRISMA_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder \
+    DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder
 RUN npm run build
 
 # ── Runner ────────────────────────────────────────────────────────────────────
