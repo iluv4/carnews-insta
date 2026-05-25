@@ -76,6 +76,8 @@ export async function generateBackground(theme: string): Promise<BackgroundGenRe
           num_outputs: 1,
         },
       }),
+      // Cap the wait so a slow provider can't blow the caller's function budget.
+      signal: AbortSignal.timeout(45_000),
     });
 
     const prediction = (await res.json()) as ReplicatePrediction;

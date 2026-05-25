@@ -60,6 +60,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ url: referenceImageBase64 || '' });
     }
 
+    // Phase 2 AI background and the layout/copy generation are independent, so
+    // kick the background off first and let it run while the layout is built —
+    // this keeps the combined wall-clock under the 60s function budget.
+    const bgPromise = useAiBackground ? generateBackground(theme) : null;
+
     // Prefer COLE-style LLM layout generation; fall back to the heuristic
     // builder if the model output is unusable or generation fails.
     let layerDocument = await generateLayerDocument({
@@ -80,11 +85,11 @@ export async function POST(req: Request) {
       });
     }
 
-    // Optional Phase 2: swap in a text-free AI background. Korean copy stays as
+    // Swap in the text-free AI background once it resolves. Korean copy stays as
     // editable text layers on top. Silently skipped if the provider is not
     // configured or generation fails, so the base flow is never blocked.
-    if (useAiBackground) {
-      const bg = await generateBackground(theme);
+    if (bgPromise) {
+      const bg = await bgPromise;
       if (bg.ok) {
         const existing = layerDocument.layers.find((l) => l.type === 'background');
         if (existing && existing.type === 'background') {
