@@ -33,6 +33,39 @@ function parseDNA(jsonl: string): {
   }
 }
 
+// ── Text-layer helpers (glyph fidelity + legibility) ─────────────────────────
+// Escape user/LLM-authored copy so it can't break the HTML text layer.
+function escapeHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// The webfont ships weights 400/700/900 only. Snap to the nearest real weight so
+// the browser never synthesizes a faux-bold glyph (degraded strokes for Hangul).
+function snapWeight(w: string | number): number {
+  const target = typeof w === 'number' ? w : parseInt(String(w), 10) || 800;
+  const loaded = [400, 700, 900];
+  return loaded.reduce((best, cur) =>
+    Math.abs(cur - target) < Math.abs(best - target) ||
+    (Math.abs(cur - target) === Math.abs(best - target) && cur > best)
+      ? cur : best, loaded[0]);
+}
+
+// WCAG relative luminance (0 = black, 1 = white) for a #rrggbb / #rgb color.
+function luminance(hex: string): number {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return 0;
+  let h = m[1];
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
 // ── Generate Korean card copy via gpt-4.1-mini ────────────────────────────────
 async function generateCopy(theme: string, clientContext: string): Promise<{
   headline: string;
@@ -83,13 +116,28 @@ function buildHtml(params: {
     ? `background: url('${photoBase64}') center/cover no-repeat;`
     : `background: ${bgColor};`;
 
+  // Legibility guarantee: the bottom scrim over a photo is always dark, so dark
+  // copy from the analyzed DNA would be unreadable — force it light. Over a solid
+  // background, flip the copy to contrast the background's luminance.
+  const headlineColor = photoBase64
+    ? (luminance(textColor) < 0.5 ? '#ffffff' : textColor)
+    : (luminance(bgColor) > 0.6 ? '#111111' : (luminance(textColor) < 0.5 ? '#ffffff' : textColor));
+  const subColor = headlineColor;
+  const snappedWeight = snapWeight(fontWeight);
+  const esc = { headline: escapeHtml(headline), subheadline: escapeHtml(subheadline), badge: escapeHtml(badge) };
+
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * {
+    margin: 0; padding: 0; box-sizing: border-box;
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
   html, body { width: 1024px; height: 1536px; overflow: hidden; }
   .card {
     width: 1024px; height: 1536px;
@@ -124,14 +172,14 @@ function buildHtml(params: {
   }
   .subheadline {
     font-size: 36px; font-weight: 400;
-    color: ${textColor};
+    color: ${subColor};
     opacity: 0.85;
     margin-bottom: 16px;
     letter-spacing: -0.5px;
   }
   .headline {
-    font-size: 96px; font-weight: ${fontWeight};
-    color: ${textColor};
+    font-size: 96px; font-weight: ${snappedWeight};
+    color: ${headlineColor};
     line-height: 1.15;
     letter-spacing: -2px;
     text-shadow: 0 2px 12px rgba(0,0,0,0.5);
@@ -148,10 +196,10 @@ function buildHtml(params: {
 <body>
 <div class="card">
   <div class="overlay"></div>
-  <div class="badge">${badge}</div>
+  <div class="badge">${esc.badge}</div>
   <div class="text-area">
-    <div class="subheadline">${subheadline}</div>
-    <div class="headline">${headline}</div>
+    <div class="subheadline">${esc.subheadline}</div>
+    <div class="headline">${esc.headline}</div>
     <div class="accent-line"></div>
   </div>
 </div>
@@ -201,8 +249,28 @@ async function htmlToImage(html: string): Promise<string> {
 
   try {
     const page = await browser.newPage();
-    await page.setViewport({ width: 1024, height: 1536, deviceScaleFactor: 1 });
+    // 2x device pixels → crisper Hangul glyph edges (output 2048×3072).
+    await page.setViewport({ width: 1024, height: 1536, deviceScaleFactor: 2 });
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: 15000 });
+
+    // Block the screenshot until the Korean webfont is painted. Without this the
+    // capture can race the @font-face load and render Hangul in a fallback font.
+    await page.evaluate(async () => {
+      await (document as unknown as { fonts: { ready: Promise<unknown> } }).fonts.ready;
+    });
+
+    // Shrink the headline to fit its block so long Korean copy never clips.
+    await page.evaluate(() => {
+      const headline = document.querySelector('.headline');
+      if (!(headline instanceof HTMLElement)) return;
+      const maxHeight = 1536 * 0.42;
+      let size = parseFloat(getComputedStyle(headline).fontSize);
+      while (size > 44 && (headline.scrollHeight > maxHeight || headline.scrollWidth > headline.clientWidth)) {
+        size -= 4;
+        headline.style.fontSize = `${size}px`;
+      }
+    });
+
     const buffer = await page.screenshot({ type: 'jpeg', quality: 90, fullPage: false });
     return `data:image/jpeg;base64,${Buffer.from(buffer).toString('base64')}`;
   } finally {
