@@ -3,7 +3,7 @@ import OpenAI from 'openai';
 import { prisma } from '@/lib/prisma'; // Assuming we have access to prisma for fetching templates if needed
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY || 'dummy_key',
 });
 
 export async function POST(req: Request) {

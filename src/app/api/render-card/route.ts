@@ -163,16 +163,18 @@ function buildHtml(params: {
 async function htmlToImage(html: string): Promise<string> {
   const puppeteer = (await import('puppeteer-core')).default;
   const chromePaths = [
+    process.env.PUPPETEER_EXECUTABLE_PATH || '',
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
   ];
   const fs = await import('fs');
   let executablePath = '';
   for (const p of chromePaths) {
-    if (fs.existsSync(p)) { executablePath = p; break; }
+    if (p && fs.existsSync(p)) { executablePath = p; break; }
   }
 
   let launchArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security'];
