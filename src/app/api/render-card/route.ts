@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { parseDNA, buildCardLayerDocument } from '@/lib/layerBuilder';
+import { generateLayerDocument } from '@/lib/layerGenerator';
 import { layerDocumentToHtml } from '@/lib/layerRenderer';
 import { validateLayerDocument } from '@/lib/layerSchema';
 import { htmlToImage } from '@/lib/puppeteerShot';
@@ -58,14 +59,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ url: referenceImageBase64 || '' });
     }
 
-    const style = parseDNA(jsonlAnalysis ?? '');
-    const copy = await generateCopy(theme, clientContext ?? '');
-
-    const layerDocument = buildCardLayerDocument({
-      style,
-      copy,
+    // Prefer COLE-style LLM layout generation; fall back to the heuristic
+    // builder if the model output is unusable or generation fails.
+    let layerDocument = await generateLayerDocument({
+      openai,
+      theme,
+      jsonlAnalysis: jsonlAnalysis ?? '',
+      clientContext: clientContext ?? '',
       photoSrc: referenceImageBase64 || undefined,
     });
+
+    if (!layerDocument) {
+      const style = parseDNA(jsonlAnalysis ?? '');
+      const copy = await generateCopy(theme, clientContext ?? '');
+      layerDocument = buildCardLayerDocument({
+        style,
+        copy,
+        photoSrc: referenceImageBase64 || undefined,
+      });
+    }
 
     const valid = validateLayerDocument(layerDocument);
     if (!valid.ok) {
