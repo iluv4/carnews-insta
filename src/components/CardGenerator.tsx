@@ -6,6 +6,8 @@ import TemplateCard from './TemplateCard';
 import { useSession, signIn } from 'next-auth/react';
 import { useTab } from '@/context/TabContext';
 import PortalDashboard from './PortalDashboard';
+import CardCanvas from './CardCanvas';
+import type { FabricSpec } from '@/lib/fabricSpec';
 
 
 interface Template {
@@ -130,7 +132,7 @@ export default function CardGenerator() {
   const [jsonlData, setJsonlData] = useState('');
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [resultImages, setResultImages] = useState<string[]>([]);
-  const [resultBlurLevels, setResultBlurLevels] = useState<number[]>([0]);
+  const [resultSpecs, setResultSpecs] = useState<(FabricSpec | null)[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [theme, setTheme] = useState('');
   const [generationMode, setGenerationMode] = useState<'creative' | 'strict'>('creative');
@@ -523,34 +525,67 @@ export default function CardGenerator() {
     if (!jsonlData && !selectedTemplateId) return;
     setGenerating(true);
     setProgress(0);
-    // Show results page immediately with empty slots
-    setResultImages(['']);
+    setResultSpecs([]);
+    setResultImages([]);
     setCurrentStep(3);
 
     try {
       const activePortal = CLIENT_PORTALS[activeTab];
       const jsonlAnalysis = jsonlData || templates.find(t => t.id === selectedTemplateId)?.content || '';
 
-      setStatusText('🎨 카드 렌더링 중...');
+      setStatusText('🎨 카드 생성 중...');
 
-      const res = await fetch('/api/render-card', {
+      // Fast path: transform streams declarative Fabric specs (no Chromium, no
+      // image generation). The client renders each spec to PNG via <CardCanvas>.
+      const res = await fetch('/api/transform', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          theme,
           jsonlAnalysis,
+          theme,
+          sourceImages: referenceImages,
           referenceImageBase64: referenceImages[0] || '',
           clientContext: activePortal?.clientContext || '',
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '생성 실패');
+      if (!res.ok || !res.body) {
+        const errData = await res.json().catch(() => ({ error: '생성 실패' }));
+        throw new Error(errData.error || '생성 실패');
+      }
 
-      if (data.url) {
-        setResultImages([data.url]);
-        setResultBlurLevels([0]);
-        setProgress(100);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let received = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let event: any;
+          try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+          if (event.done) { setProgress(100); continue; }
+
+          if (typeof event.index === 'number' && event.fabricSpec) {
+            setResultSpecs(prev => {
+              const next = prev.length > event.index
+                ? [...prev]
+                : [...prev, ...Array(event.index + 1 - prev.length).fill(null)];
+              next[event.index] = event.fabricSpec as FabricSpec;
+              return next;
+            });
+            received += 1;
+            setProgress(p => Math.min(95, Math.max(p, received * 20)));
+          }
+
+          if (event.error) console.warn('[transform] slide error', event.index, event.error);
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -580,7 +615,7 @@ export default function CardGenerator() {
     { title: '스타일 선택', completed: !!selectedTemplateId || !!jsonlData },
     { title: '스타일 학습', completed: !!jsonlData },
     { title: '내용 입력', completed: !!theme },
-    { title: '편집 및 저장', completed: resultImages.length > 0 }
+    { title: '편집 및 저장', completed: resultSpecs.length > 0 }
   ];
 
   const navigableSteps: Record<number, number> = { 0: 0, 1: 0, 2: 2, 3: 3 };
@@ -962,32 +997,24 @@ export default function CardGenerator() {
                   <p className={styles.sectionDesc}>각 이미지를 클릭하면 확대해서 볼 수 있어요.</p>
                 </div>
                 <div className={styles.resultGrid}>
-                  {['COVER'].map((label, i) => (
+                  {resultSpecs.map((spec, i) => (
                     <div key={i} className={styles.resultCard}>
-                      <span className={styles.resultLabel}>{label}</span>
-                      {resultImages[i] ? (
+                      <span className={styles.resultLabel}>{`SLIDE ${i + 1}`}</span>
+                      {spec ? (
                         <>
-                          <a href={resultBlurLevels[i] ? undefined : resultImages[i]} target="_blank" rel="noopener noreferrer" style={{ display: 'block', position: 'relative' }}>
-                            <img
-                              src={resultImages[i]}
-                              alt={label}
-                              className={styles.resultImg}
-                              style={{
-                                filter: resultBlurLevels[i] ? `blur(${resultBlurLevels[i] * 8}px)` : 'none',
-                                transition: 'filter 0.4s ease',
-                                transform: resultBlurLevels[i] ? 'scale(1.05)' : 'scale(1)',
-                              }}
-                            />
-                            {resultBlurLevels[i] > 0 && (
-                              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.85rem', fontWeight: 600, textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
-                                ✨ 생성 중...
-                              </div>
-                            )}
-                          </a>
-                          {!resultBlurLevels[i] && (
+                          <CardCanvas
+                            spec={spec}
+                            displayWidth={360}
+                            onPng={(png) => setResultImages(prev => {
+                              const next = [...prev];
+                              next[i] = png;
+                              return next;
+                            })}
+                          />
+                          {resultImages[i] && (
                             <a
                               href={resultImages[i]}
-                              download={`cardnews-${label.toLowerCase()}.jpg`}
+                              download={`cardnews-${i + 1}.png`}
                               className={styles.resultDownloadBtn}
                             >
                               ↓ 다운로드

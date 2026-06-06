@@ -1,17 +1,64 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { getCachedAnalysis, setCachedAnalysis } from '@/lib/analysisCache';
+import { fallbackLayout } from '@/lib/fabricSpec';
 
 export const maxDuration = 60;
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || 'dummy_key',
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'dummy_key' });
+
+function hasKey(): boolean {
+  const k = process.env.OPENAI_API_KEY;
+  return !!k && k !== 'dummy_key' && k !== 'your_openai_api_key_here';
+}
+
+// Output is a STRUCTURED "Layout Template" (a blueprint for the deterministic
+// Fabric.js compositor) — NOT the old free-form "Design DNA" that fed an image
+// generator. The two formats are intentionally incompatible; transform's
+// parseLayout falls back to a default layout for legacy DNA inputs.
+const REFERENCE_PROMPT = `You analyse Korean Instagram card-news references and produce a reusable "Layout Template" JSON.
+The template will drive a deterministic Fabric.js compositor — be CONCRETE, not poetic.
+
+Return STRICTLY this JSON shape (no markdown, no commentary):
+
+{
+  "type": "layout",
+  "slides": [
+    {
+      "role": "cover" | "review" | "menu" | "cta" | "info" | "closing",
+      "bg": "photo-fullbleed" | "photo-collage" | "color",
+      "title": {
+        "pos": "top-left" | "top-center" | "top-right" | "middle-left" | "middle-center" | "middle-right" | "bottom-left" | "bottom-center" | "bottom-right",
+        "weight": 700-900,
+        "color": "#hex",
+        "accent_bar": "left" | "none"
+      },
+      "body": {
+        "pos": "...",
+        "style": "emoji-bullet" | "paragraph" | "none",
+        "emojis": ["😍","😎","🤤"],
+        "color": "#hex"
+      },
+      "footer": { "pos": "...", "text_role": "caption" | "cta-arrow" | "brand", "color": "#hex" }
+    }
+  ],
+  "palette": { "primary": "#hex", "accent": "#hex", "text": "#hex", "overlay": "rgba(0,0,0,0.45)" },
+  "typography": { "family": "Pretendard" | "SpoqaHanSansNeo" | "sans", "weight_title": 700-900, "weight_body": 400-700 },
+  "decor": { "brand_mark": { "pos": "top-right", "text": "BrandName?" }, "motifs": ["left-accent-bar","emoji-bullet","arrow-cta","badge-circle"] }
+}
+
+Rules:
+- One element per slide is required.
+- "slides" length should match the count of reference images provided (default 3 if unsure).
+- If a slide uses a "|" left accent bar before the title, set accent_bar="left".
+- If body uses emoji bullets like 😍😎🤤 list emojis (3 typical).
+- Pick "overlay" rgba opacity matching the actual dark overlay over photos (0.3–0.6).
+- Output JSON only.`;
 
 export async function POST(req: Request) {
+  const t0 = Date.now();
   try {
     const body = await req.json();
-    // Accept imageUrls (array) or legacy imageUrl (single)
     const imageUrls: string[] = body.imageUrls || (body.imageUrl ? [body.imageUrl] : []);
     const cacheKey: string | undefined = body.cacheKey;
 
@@ -19,87 +66,62 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Image URL is required' }, { status: 400 });
     }
 
-    // Return cached result if available (saves API cost on repeated analysis)
+    // Namespaced `layout:` so it never collides with old "Design DNA" cache
+    // entries (different, incompatible format).
     if (cacheKey) {
-      const cached = await getCachedAnalysis(cacheKey);
+      const cached = await getCachedAnalysis(`layout:${cacheKey}`);
       if (cached) {
-        console.log('[analyze] DB cache hit for', cacheKey);
+        console.log('[analyze] layout cache hit for', cacheKey);
         return NextResponse.json({ analysis: cached, cached: true });
       }
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    console.log('[analyze] API key present:', !!apiKey, '| images:', imageUrls.length);
-    if (!apiKey || apiKey === 'your_openai_api_key_here' || apiKey === 'dummy_key') {
-      const dummyJsonl =
-`{"type":"background", "color":"#1a1a1a", "style":"gradient"}
-{"type":"title", "content":"카드뉴스 제목 예시", "color":"#ffffff", "position":"top-center", "fontSize":"large"}
-{"type":"body", "content":"이곳에 본문 내용이 들어갑니다. 카드뉴스의 핵심 메시지를 분석하여 추출합니다.", "color":"#dddddd", "position":"center", "fontSize":"medium"}
-{"type":"graphic_element", "description":"A glowing neon circle", "position":"bottom-right"}`;
-
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      return NextResponse.json({ analysis: dummyJsonl });
+    if (!hasKey()) {
+      const dummy = JSON.stringify(fallbackLayout(3));
+      await new Promise((r) => setTimeout(r, 600));
+      return NextResponse.json({ analysis: dummy, provider: 'fallback-dummy' });
     }
 
-    // Images arrive as data: base64 strings from the client
-    const base64Images = imageUrls.slice(0, 5);
-    console.log(`[analyze] receiving ${base64Images.length} base64 images`);
-
-    const imageBlocks = base64Images.map(img => ({
-      type: "image_url" as const,
-      image_url: { url: img },
-    }));
-
-    const visionResponse = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
+    const slice = imageUrls.slice(0, 3);
+    const res = await openai.chat.completions.create({
+      model: 'gpt-4.1-mini',
+      response_format: { type: 'json_object' },
+      max_tokens: 1200,
       messages: [
+        { role: 'system', content: 'You output ONLY JSON. No markdown.' },
         {
-          role: "system",
-          content: "You are a world-class Senior UI/UX Designer and Design Analyst specializing in Korean Instagram card news (카드뉴스). Extract every visual detail with pixel-level precision for faithful style replication."
-        },
-        {
-          role: "user",
+          role: 'user',
           content: [
-            {
-              type: "text",
-              text: `Analyze these ${base64Images.length} Korean Instagram card news reference image(s) and synthesize a unified Design DNA. Be exhaustive — your output feeds directly into an AI image generator that must faithfully replicate this visual style.
-
-Extract ALL of the following as individual JSONL lines:
-1. background_dna: exact HEX colors, gradient direction/stops, texture type (grain/noise level, glassmorphism opacity), any overlay patterns
-2. typography_dna: font weight (100-900), style (sans-serif/serif/display), size hierarchy ratios, letter-spacing, line-height, text color(s), shadow/outline specs, alignment
-3. layout_dna: grid structure, element positioning (top-heavy/centered/split), padding/margin rhythm, aspect ratio usage, z-layer stacking
-4. color_palette: list every HEX color used with role (primary/accent/text/bg/overlay)
-5. graphic_elements_dna: border-radius values, stroke widths, shadow blur/spread, shape types, icon style, decorative motifs
-6. photo_treatment_dna: photo filter style (warm/cool/desaturated/vivid), vignette, blur usage, photo-to-graphic ratio
-7. subject_dna: what/who is in the photos, framing (close-up/full-body/product), lighting mood, background setting
-8. brand_mood_dna: 5 precise adjectives describing the overall aesthetic feel
-
-OUTPUT: Strictly JSONL — one JSON object per line, no markdown, no code fences.
-Example lines:
-{"type":"background_dna","primary":"#0a0a0a","secondary":"#1f1f1f","texture":"subtle_grain","gradient":"linear 180deg #0a0a0a→#1f1f1f"}
-{"type":"typography_dna","weight":"800","family":"sans-serif","primary_color":"#ffffff","accent_color":"#ff6b35","alignment":"center","shadow":"2px 2px 8px rgba(0,0,0,0.8)"}
-{"type":"color_palette","colors":["#0a0a0a","#ffffff","#ff6b35","#1f1f1f"]}
-{"type":"subject_dna","description":"Korean woman, close-up portrait, warm studio lighting, soft smile, blurred neutral background"}`
-            },
-            ...imageBlocks,
+            { type: 'text' as const, text: REFERENCE_PROMPT },
+            ...slice.map((img) => ({ type: 'image_url' as const, image_url: { url: img } })),
           ],
         },
       ],
-      max_tokens: 2000,
     });
 
-    const analysis = visionResponse.choices[0].message.content;
-
-    if (cacheKey && analysis) {
-      await setCachedAnalysis(cacheKey, analysis);
-      console.log('[analyze] saved to DB cache for', cacheKey);
+    let analysis = res.choices[0].message.content ?? '';
+    // Validate; fall back to a sane default layout if the model returned junk.
+    try {
+      const parsed = JSON.parse(analysis);
+      if (!parsed || parsed.type !== 'layout' || !Array.isArray(parsed.slides) || parsed.slides.length === 0) {
+        analysis = JSON.stringify(fallbackLayout(slice.length || 3));
+      }
+    } catch {
+      analysis = JSON.stringify(fallbackLayout(slice.length || 3));
     }
 
-    return NextResponse.json({ analysis });
+    if (cacheKey) {
+      await setCachedAnalysis(`layout:${cacheKey}`, analysis);
+    }
 
-  } catch (error: any) {
-    const detail = error?.error?.message || error?.message || String(error);
-    console.error('Error in OpenAI Analysis route:', detail);
+    console.log(`[analyze] layout in ${Date.now() - t0}ms`);
+    return NextResponse.json({ analysis, provider: 'openai' });
+  } catch (error) {
+    const detail =
+      (error as { error?: { message?: string }; message?: string })?.error?.message ||
+      (error as Error)?.message ||
+      String(error);
+    console.error('[analyze] route error:', detail);
     return NextResponse.json({ error: detail }, { status: 500 });
   }
 }
