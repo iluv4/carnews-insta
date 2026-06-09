@@ -52,7 +52,14 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
+# Migration files + runtime migrator, applied on boot via the entrypoint. The
+# migrator uses the `pg` driver already traced into the standalone bundle, so
+# the heavyweight Prisma CLI does not need to ship in the runner image.
+COPY --from=builder --chown=nextjs:nodejs /app/prisma/migrations ./prisma/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrate-deploy.mjs ./scripts/migrate-deploy.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/docker-entrypoint.sh ./docker-entrypoint.sh
+
 USER nextjs
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+ENTRYPOINT ["sh", "./docker-entrypoint.sh"]
