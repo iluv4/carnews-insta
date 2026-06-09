@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>인스타 레퍼런스 모니터링</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{ --bg:#0b0b0f; --card:#16161d; --line:#26262f; --txt:#f4f4f6; --sub:#9aa0a6; --red:#E50914; --accent:#ff6b35; }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  body{ background:var(--bg); color:var(--txt); font-family:'Pretendard',sans-serif; padding:32px 20px 80px; }
+  .wrap{ max-width:1100px; margin:0 auto; }
+  header.top{ display:flex; align-items:center; gap:16px; margin-bottom:8px; }
+  header.top h1{ font-size:24px; font-weight:800; letter-spacing:-.5px; }
+  .badge{ background:var(--red); color:#fff; font-size:12px; font-weight:700; padding:4px 10px; border-radius:999px; }
+  .sub{ color:var(--sub); font-size:14px; margin-bottom:24px; }
+  .searchbar{ display:flex; gap:8px; margin-bottom:28px; }
+  .searchbar input{ flex:1; background:var(--card); border:1px solid var(--line); color:var(--txt); padding:13px 16px; border-radius:12px; font-size:15px; font-family:inherit; }
+  .searchbar button{ background:var(--red); color:#fff; border:none; padding:0 22px; border-radius:12px; font-weight:700; font-size:15px; cursor:pointer; }
+  .kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:28px; }
+  .kpi{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; }
+  .kpi .label{ color:var(--sub); font-size:13px; margin-bottom:8px; }
+  .kpi .val{ font-size:26px; font-weight:800; letter-spacing:-1px; }
+  .kpi .val small{ font-size:14px; color:var(--sub); font-weight:500; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+  .panel{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; }
+  .panel h3{ font-size:15px; font-weight:700; margin-bottom:16px; }
+  .panel canvas{ max-height:260px; }
+  .insight{ background:linear-gradient(135deg,#1d1420,#16161d); border:1px solid var(--line); border-radius:16px; padding:20px; margin-bottom:28px; }
+  .insight h3{ font-size:15px; margin-bottom:12px; }
+  .insight ul{ list-style:none; display:flex; flex-direction:column; gap:10px; }
+  .insight li{ font-size:14px; color:#d7d7db; padding-left:22px; position:relative; line-height:1.5; }
+  .insight li::before{ content:'▸'; color:var(--accent); position:absolute; left:0; }
+  .insight b{ color:var(--txt); }
+  h2.section{ font-size:18px; font-weight:800; margin:8px 0 16px; }
+  .gallery{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+  .post{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; transition:.15s; }
+  .post:hover{ transform:translateY(-3px); border-color:var(--red); }
+  .post .type{ font-size:11px; color:var(--sub); text-transform:uppercase; letter-spacing:.5px; }
+  .post .cap{ font-size:13px; margin:8px 0 12px; line-height:1.45; min-height:56px; }
+  .post .stat{ font-size:13px; color:var(--sub); display:flex; justify-content:space-between; }
+  .post .stat b{ color:var(--red); font-size:15px; }
+  .viral{ outline:2px solid var(--red); }
+  .post button.make{ width:100%; margin-top:12px; background:rgba(255,107,53,.12); color:var(--accent); border:1px solid rgba(255,107,53,.4); padding:9px; border-radius:9px; font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; transition:.15s; }
+  .post button.make:hover{ background:var(--accent); color:#fff; }
+  footer{ color:var(--sub); font-size:12px; text-align:center; margin-top:40px; }
+  /* modal */
+  .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.75); display:none; align-items:center; justify-content:center; z-index:50; padding:20px; }
+  .overlay.on{ display:flex; }
+  .modal{ background:var(--card); border:1px solid var(--line); border-radius:20px; max-width:760px; width:100%; padding:28px; max-height:90vh; overflow:auto; }
+  .modal .x{ float:right; color:var(--sub); cursor:pointer; font-size:22px; border:none; background:none; }
+  .modal h2{ font-size:19px; font-weight:800; margin-bottom:4px; }
+  .modal .ref{ color:var(--sub); font-size:13px; margin-bottom:20px; }
+  .steps{ display:flex; flex-direction:column; gap:14px; }
+  .step{ display:flex; gap:12px; align-items:flex-start; opacity:.35; transition:.4s; }
+  .step.done{ opacity:1; }
+  .step .n{ width:26px; height:26px; border-radius:50%; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex-shrink:0; }
+  .step .body{ flex:1; }
+  .step .body .t{ font-weight:700; font-size:14px; margin-bottom:6px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{ background:#0b0b0f; border:1px solid var(--line); border-radius:999px; padding:4px 10px; font-size:12px; color:#d7d7db; }
+  .cardprev{ margin-top:10px; width:230px; aspect-ratio:4/5; border-radius:14px; padding:22px; display:flex; flex-direction:column; justify-content:flex-end; color:#fff; position:relative; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.5); }
+  .cardprev .badge2{ position:absolute; top:14px; right:14px; background:#fff; color:#111; font-size:11px; font-weight:800; padding:5px 9px; border-radius:999px; }
+  .cardprev .sub2{ font-size:13px; opacity:.85; margin-bottom:6px; }
+  .cardprev .head2{ font-size:24px; font-weight:900; line-height:1.2; letter-spacing:-.5px; word-break:keep-all; }
+  .cardprev .line2{ width:46px; height:5px; border-radius:3px; margin-top:14px; }
+  .loophint{ background:#0b0b0f; border:1px dashed var(--line); border-radius:12px; padding:12px 14px; margin-top:18px; font-size:12.5px; color:var(--sub); line-height:1.5; }
+  /* onboarding */
+  .onboard{ position:fixed; inset:0; background:rgba(8,8,12,.96); z-index:80; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .onboard.off{ display:none; }
+  .obox{ max-width:540px; width:100%; text-align:center; }
+  .obox h2{ font-size:26px; font-weight:800; margin-bottom:8px; letter-spacing:-.5px; }
+  .obox p{ color:var(--sub); margin-bottom:28px; }
+  .nichegrid{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  .niche{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:22px; cursor:pointer; transition:.15s; text-align:left; }
+  .niche:hover{ border-color:var(--accent); transform:translateY(-3px); }
+  .niche .emo{ font-size:30px; }
+  .niche .nm{ font-weight:800; margin-top:8px; font-size:16px; }
+  .niche .ds{ color:var(--sub); font-size:12.5px; margin-top:4px; }
+  /* recommended accounts */
+  .nichebar{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+  .nichebar .tab{ background:var(--card); border:1px solid var(--line); color:var(--sub); padding:8px 14px; border-radius:999px; font-size:13px; font-weight:600; cursor:pointer; }
+  .nichebar .tab.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .recs{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-bottom:34px; }
+  .rec{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
+  .rec .rh{ display:flex; align-items:center; gap:10px; }
+  .rec .av{ width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#ff6b35,#E50914); display:flex; align-items:center; justify-content:center; font-weight:800; }
+  .rec .hn{ font-weight:700; font-size:14px; }
+  .rec .fo{ color:var(--sub); font-size:12px; }
+  .rec .why{ font-size:12.5px; color:#d7d7db; margin:12px 0; line-height:1.45; }
+  .rec .trend{ font-size:12px; color:#2de2e6; font-weight:700; }
+  .rec button{ width:100%; margin-top:12px; background:rgba(255,107,53,.12); color:var(--accent); border:1px solid rgba(255,107,53,.4); padding:9px; border-radius:9px; font-family:inherit; font-size:12.5px; font-weight:700; cursor:pointer; }
+  .rec button:hover{ background:var(--accent); color:#fff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>📈 인스타 레퍼런스 모니터링</h1>
+    <span class="badge">LIVE</span>
+  </header>
+  <p class="sub" id="subtitle">관심 업종을 고르면, 그 분야에서 지금 뜨는 레퍼런스만 자동으로 모아드려요.</p>
+
+  <div class="nichebar" id="nichebar"></div>
+
+  <h2 class="section">🎯 <span id="nicheLabel"></span> 추천 레퍼런스</h2>
+  <div class="recs" id="recs"></div>
+
+  <h2 class="section">📊 심층 분석 예시 — <span style="color:var(--red)">@netflix</span></h2>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="insight" id="insight"></div>
+
+  <div class="grid2">
+    <div class="panel"><h3>좋아요 추이 (게시물별)</h3><canvas id="trend"></canvas></div>
+    <div class="panel"><h3>콘텐츠 포맷별 평균 좋아요</h3><canvas id="fmt"></canvas></div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><h3>조회수 → 좋아요 (릴스)</h3><canvas id="scatter"></canvas></div>
+    <div class="panel"><h3>게시 시간대(KST)별 좋아요</h3><canvas id="hour"></canvas></div>
+  </div>
+
+  <h2 class="section">🖼️ 레퍼런스 갤러리 (좋아요순)</h2>
+  <div class="gallery" id="gallery"></div>
+
+  <footer>데이터 출처: Instagram (Looter API) · @netflix 게시물 12건 · 데모</footer>
+</div>
+
+<div class="onboard" id="onboard">
+  <div class="obox">
+    <h2>👋 어떤 콘텐츠를 만드세요?</h2>
+    <p>업종을 고르면, 그 분야에서 지금 뜨는 레퍼런스만 자동으로 모아드려요.</p>
+    <div class="nichegrid" id="nichegrid"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <button class="x" onclick="closeModal()">✕</button>
+    <h2>✨ 레퍼런스 → 카드뉴스 자동 생성</h2>
+    <div class="ref" id="mref"></div>
+    <div class="steps">
+      <div class="step" id="s1"><div class="n">1</div><div class="body">
+        <div class="t">🔍 레퍼런스 감지 & 디자인 DNA 추출 (Vision AI)</div>
+        <div class="chips" id="dna"></div></div></div>
+      <div class="step" id="s2"><div class="n">2</div><div class="body">
+        <div class="t">✍️ 카피 생성 (한국어)</div>
+        <div id="copywrap" style="font-size:13px;color:#d7d7db"></div></div></div>
+      <div class="step" id="s3"><div class="n">3</div><div class="body">
+        <div class="t">🎨 카드뉴스 렌더링 (HTML→이미지, 텍스트 100% 정확)</div>
+        <div id="cardwrap"></div></div></div>
+    </div>
+    <div class="loophint">💡 <b>이게 차별점입니다.</b> 다른 레퍼런스 서비스는 "이게 떴어요"까지만 보여줍니다.
+    우리는 뜨는 레퍼런스를 감지해 <b>디자인 DNA를 학습 → 당신 버전의 카드뉴스까지 자동 제작</b>합니다.</div>
+  </div>
+</div>
+
+<script>
+const TYPE_KO = { photo:'사진', reel:'릴스', carousel:'캐러셀' };
+const posts = [
+  {t:1779285601,type:'carousel',likes:22607,comments:6933,plays:0,cap:'6월 라인업이 햇살과 잘 어울리는 이유'},
+  {t:1780956002,type:'carousel',likes:88986,comments:293,plays:0,cap:'스트레인저 띵스 × 더 버로우즈 평행이론'},
+  {t:1780948805,type:'reel',likes:8000,comments:263,plays:517736,cap:'오피스 로맨스 - 우주의 단 하나의 별'},
+  {t:1780941605,type:'reel',likes:17409,comments:246,plays:600363,cap:'콜먼 도밍고 - 더 포 시즌스'},
+  {t:1780938005,type:'reel',likes:15301,comments:166,plays:780173,cap:"굿 걸스 가이드 투 머더 S2"},
+  {t:1780930803,type:'photo',likes:195974,comments:520,plays:0,cap:'에놀라의 표정을 확대해보세요'},
+  {t:1780927208,type:'reel',likes:263936,comments:2420,plays:4211923,cap:'스쿠비가 실사로! 스쿠비-두 오리진스'},
+  {t:1780855200,type:'carousel',likes:57976,comments:478,plays:0,cap:'더 포 시즌스 S2, 웃음 폭발'},
+  {t:1780851602,type:'carousel',likes:100559,comments:386,plays:0,cap:'근데 왜 저 사람이 웃고 있지?'},
+  {t:1780848005,type:'reel',likes:245662,comments:4632,plays:14897034,cap:'오피스 로맨스 지금 방영중'},
+  {t:1780776004,type:'reel',likes:211051,comments:1768,plays:4690955,cap:'아바타: 라스트 에어벤더 시즌2'},
+  {t:1780772406,type:'reel',likes:92858,comments:596,plays:1827673,cap:'모든 우주에서 전설'},
+];
+const fmtK = n => n>=1000 ? (n/1000).toFixed(n>=10000?0:1)+'K' : n;
+const sorted = [...posts].sort((a,b)=>a.t-b.t);
+const mean = posts.reduce((s,p)=>s+p.likes,0)/posts.length;
+const top = [...posts].sort((a,b)=>b.likes-a.likes)[0];
+const reels = posts.filter(p=>p.plays>0);
+
+// KPIs
+document.getElementById('kpis').innerHTML = [
+  ['게시물', posts.length+'건'],
+  ['평균 좋아요', fmtK(Math.round(mean))],
+  ['최고 좋아요', fmtK(top.likes)],
+  ['릴스 평균 조회', fmtK(Math.round(reels.reduce((s,p)=>s+p.plays,0)/reels.length))],
+].map(([l,v])=>`<div class="kpi"><div class="label">${l}</div><div class="val">${v}</div></div>`).join('');
+
+// Insight
+const avgByType = {};
+['photo','reel','carousel'].forEach(t=>{const a=posts.filter(p=>p.type===t);if(a.length)avgByType[t]=a.reduce((s,p)=>s+p.likes,0)/a.length;});
+const bestFmt = Object.entries(avgByType).sort((a,b)=>b[1]-a[1])[0];
+// correlation plays vs likes
+const mx=reels.reduce((s,p)=>s+p.plays,0)/reels.length, my=reels.reduce((s,p)=>s+p.likes,0)/reels.length;
+let num=0,dx=0,dy=0; reels.forEach(p=>{num+=(p.plays-mx)*(p.likes-my);dx+=(p.plays-mx)**2;dy+=(p.likes-my)**2;});
+const r=(num/Math.sqrt(dx*dy)).toFixed(2);
+document.getElementById('insight').innerHTML = `<h3>💡 자동 인사이트</h3><ul>
+  <li>가장 반응 좋은 포맷은 <b>${TYPE_KO[bestFmt[0]]}</b> (평균 ${fmtK(Math.round(bestFmt[1]))} 좋아요) — 다음 콘텐츠 기획 시 우선 고려.</li>
+  <li>최고 게시물: <b>"${top.cap}"</b> — ${top.likes.toLocaleString()} 좋아요로 평균의 ${(top.likes/mean).toFixed(1)}배.</li>
+  <li>릴스 <b>조회수↔좋아요 상관계수 r=${r}</b> — 도달이 늘면 좋아요도 비례 증가. 초기 도달 확보가 핵심.</li>
+</ul>`;
+
+const gridC='#26262f', txtC='#9aa0a6';
+Chart.defaults.color=txtC; Chart.defaults.font.family='Pretendard';
+
+new Chart(trend,{type:'line',data:{labels:sorted.map(p=>new Date(p.t*1000).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})),
+  datasets:[{data:sorted.map(p=>p.likes),borderColor:'#E50914',backgroundColor:'rgba(229,9,20,.1)',fill:true,tension:.3,pointRadius:4}]},
+  options:{plugins:{legend:{display:false}},scales:{x:{grid:{color:gridC}},y:{grid:{color:gridC},ticks:{callback:fmtK}}}}});
+
+new Chart(fmt,{type:'bar',data:{labels:Object.keys(avgByType).map(t=>TYPE_KO[t]),
+  datasets:[{data:Object.values(avgByType),backgroundColor:['#9aa0a6','#E50914','#564d4d']}]},
+  options:{plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{grid:{color:gridC},ticks:{callback:fmtK}}}}});
+
+new Chart(scatter,{type:'scatter',data:{datasets:[{data:reels.map(p=>({x:p.plays,y:p.likes})),backgroundColor:'#E50914',pointRadius:7}]},
+  options:{plugins:{legend:{display:false}},scales:{x:{type:'logarithmic',grid:{color:gridC},ticks:{callback:fmtK},title:{display:true,text:'조회수(log)'}},y:{grid:{color:gridC},ticks:{callback:fmtK}}}}});
+
+new Chart(hour,{type:'scatter',data:{datasets:[{data:posts.map(p=>({x:new Date(p.t*1000+9*3600*1000).getUTCHours(),y:p.likes})),backgroundColor:'#ff6b35',pointRadius:7}]},
+  options:{plugins:{legend:{display:false}},scales:{x:{min:0,max:23,grid:{color:gridC},title:{display:true,text:'시(KST)'}},y:{grid:{color:gridC},ticks:{callback:fmtK}}}}});
+
+// Gallery
+const gsorted = [...posts].sort((a,b)=>b.likes-a.likes);
+document.getElementById('gallery').innerHTML = gsorted.map((p,i)=>`
+  <div class="post ${p.likes>mean*2?'viral':''}">
+    <div class="type">${TYPE_KO[p.type]}${p.likes>mean*2?' · 🔥인기':''}</div>
+    <div class="cap">${p.cap}</div>
+    <div class="stat"><span>❤️ <b>${fmtK(p.likes)}</b></span><span>💬 ${fmtK(p.comments)}</span></div>
+    <button class="make" onclick="makeCard(${i})">✨ 이 레퍼런스로 카드뉴스 만들기</button>
+  </div>`).join('');
+
+// ── 차별화 루프: 감지 → DNA 추출 → 카드뉴스 생성 ─────────────────────────
+const THEMES = [
+  {bg:'linear-gradient(160deg,#1a1a2e,#16213e)', accent:'#ff6b35', sub:'#cfd2ff', dna:['#16213e','#ff6b35','sans-serif 900','centered','grain']},
+  {bg:'linear-gradient(160deg,#2d1b1b,#3d2817)', accent:'#ffb703', sub:'#ffe8c2', dna:['#3d2817','#ffb703','serif 800','bottom-heavy','warm filter']},
+  {bg:'linear-gradient(160deg,#0f2027,#203a43)', accent:'#2de2e6', sub:'#bff', dna:['#203a43','#2de2e6','sans 800','split','glassmorphism']},
+];
+function makeCard(i){
+  const p = gsorted[i];
+  const th = THEMES[i % THEMES.length];
+  document.getElementById('mref').textContent = `원본 레퍼런스: "${p.cap}" · ${TYPE_KO[p.type]} · ${p.likes.toLocaleString()} 좋아요`;
+  ['s1','s2','s3'].forEach(s=>document.getElementById(s).classList.remove('done'));
+  document.getElementById('dna').innerHTML='';
+  document.getElementById('copywrap').innerHTML='';
+  document.getElementById('cardwrap').innerHTML='';
+  document.getElementById('overlay').classList.add('on');
+
+  // step1: DNA chips
+  setTimeout(()=>{
+    document.getElementById('s1').classList.add('done');
+    document.getElementById('dna').innerHTML = th.dna.map(d=>`<span class="chip">${d}</span>`).join('');
+  }, 400);
+  // step2: copy
+  const headline = p.cap.length>14 ? p.cap.slice(0,13)+'…' : p.cap;
+  setTimeout(()=>{
+    document.getElementById('s2').classList.add('done');
+    document.getElementById('copywrap').innerHTML =
+      `헤드라인: <b style="color:#fff">${headline}</b> · 뱃지: <b style="color:#fff">신작</b>`;
+  }, 1300);
+  // step3: rendered card
+  setTimeout(()=>{
+    document.getElementById('s3').classList.add('done');
+    document.getElementById('cardwrap').innerHTML =
+      `<div class="cardprev" style="background:${th.bg}">
+        <div class="badge2">신작</div>
+        <div class="sub2" style="color:${th.sub}">지금 가장 뜨는 콘텐츠</div>
+        <div class="head2">${headline}</div>
+        <div class="line2" style="background:${th.accent}"></div>
+      </div>`;
+  }, 2200);
+}
+function closeModal(){ document.getElementById('overlay').classList.remove('on'); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape')closeModal(); });
+
+// ── 업종 선택 → 맞춤 레퍼런스 자동 큐레이션 ──────────────────────────────────
+const NICHES = {
+  fashion:{emo:'👗',label:'패션',ds:'무신사·29CM 스타일',accounts:[
+    {h:'musinsa',f:'142만',why:'미니멀 룩북 캐러셀이 최근 인게이지 주도',trend:'+38% ▲ 2주'},
+    {h:'29cm.official',f:'98만',why:'에디토리얼 톤 + 여백 활용 레퍼런스',trend:'+22% ▲'},
+    {h:'stylenanda',f:'210만',why:'Y2K 컬러 팝 스타일 급상승',trend:'+51% ▲'},
+    {h:'wconcept',f:'76만',why:'브랜드 협업 카드뉴스 포맷 참고',trend:'+12% ▲'}]},
+  beauty:{emo:'💄',label:'뷰티',ds:'올리브영·로드샵',accounts:[
+    {h:'oliveyoung.official',f:'180만',why:'신제품 비교 카드뉴스 포맷 강세',trend:'+44% ▲'},
+    {h:'romand.official',f:'120만',why:'무드 컬러 스와치 레퍼런스',trend:'+29% ▲'},
+    {h:'3ce_official',f:'310만',why:'블랙 미니멀 럭셔리 톤',trend:'+18% ▲'},
+    {h:'amusekorea',f:'54만',why:'비건 클린뷰티 파스텔 무드',trend:'+33% ▲'}]},
+  cafe:{emo:'☕',label:'카페·디저트',ds:'카페·F&B 소상공인',accounts:[
+    {h:'starbuckskorea',f:'290만',why:'시즌 메뉴 출시 카드뉴스 정석',trend:'+27% ▲'},
+    {h:'baeminfood',f:'88만',why:'위트있는 카피+그래픽 밈 포맷',trend:'+62% ▲'},
+    {h:'ediya_coffee',f:'41만',why:'신메뉴 프로모션 레이아웃',trend:'+15% ▲'},
+    {h:'nudake_official',f:'33만',why:'아트 디저트 비주얼 레퍼런스',trend:'+40% ▲'}]},
+  ent:{emo:'🎬',label:'엔터·콘텐츠',ds:'OTT·미디어 (실데이터 분석 가능)',accounts:[
+    {h:'netflix',f:'3,200만',why:'밈+릴스 인게이지 폭발 — 아래 심층 분석 제공',trend:'+73% ▲',live:true},
+    {h:'tvn_drama',f:'140만',why:'드라마 명장면 카드 포맷',trend:'+25% ▲'},
+    {h:'watcha',f:'52만',why:'에디토리얼 추천 큐레이션 톤',trend:'+19% ▲'},
+    {h:'disneypluskr',f:'88만',why:'IP 캐릭터 중심 비주얼',trend:'+31% ▲'}]},
+};
+let current = 'ent';
+
+function renderNicheGrid(){
+  document.getElementById('nichegrid').innerHTML = Object.entries(NICHES).map(([k,n])=>`
+    <div class="niche" onclick="startApp('${k}')">
+      <div class="emo">${n.emo}</div><div class="nm">${n.label}</div><div class="ds">${n.ds}</div>
+    </div>`).join('');
+}
+function renderNicheBar(){
+  document.getElementById('nichebar').innerHTML = Object.entries(NICHES).map(([k,n])=>
+    `<div class="tab ${k===current?'active':''}" onclick="selectNiche('${k}')">${n.emo} ${n.label}</div>`).join('');
+}
+function renderRecs(){
+  const n = NICHES[current];
+  document.getElementById('nicheLabel').textContent = n.label;
+  document.getElementById('subtitle').textContent = `'${n.label}' 분야에서 지금 뜨는 레퍼런스 계정이에요. 마음에 드는 계정을 분석해보세요.`;
+  document.getElementById('recs').innerHTML = n.accounts.map(a=>`
+    <div class="rec">
+      <div class="rh"><div class="av">${a.h[0].toUpperCase()}</div>
+        <div><div class="hn">@${a.h}</div><div class="fo">팔로워 ${a.f}</div></div></div>
+      <div class="why">${a.why}</div>
+      <div class="trend">📈 인게이지먼트 ${a.trend}</div>
+      <button onclick="analyzeAcct('${a.h}',${a.live?true:false})">${a.live?'📊 심층 분석 보기':'분석하기'}</button>
+    </div>`).join('');
+}
+function selectNiche(k){ current=k; renderNicheBar(); renderRecs(); }
+function startApp(k){ document.getElementById('onboard').classList.add('off'); selectNiche(k); }
+function analyzeAcct(h, live){
+  if(live){ document.getElementById('kpis').scrollIntoView({behavior:'smooth'}); }
+  else{ alert(`데모 버전입니다.\n실제 서비스에서는 @${h}의 최신 게시물을 실시간으로 불러와 아래와 같은 심층 분석을 제공합니다.\n(현재는 @netflix 실데이터를 예시로 보여드려요)`); document.getElementById('kpis').scrollIntoView({behavior:'smooth'}); }
+}
+renderNicheGrid(); renderNicheBar(); renderRecs();
+</script>
+</body>
+</html>
