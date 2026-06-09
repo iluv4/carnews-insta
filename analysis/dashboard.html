@@ -67,6 +67,32 @@
   .cardprev .head2{ font-size:24px; font-weight:900; line-height:1.2; letter-spacing:-.5px; word-break:keep-all; }
   .cardprev .line2{ width:46px; height:5px; border-radius:3px; margin-top:14px; }
   .loophint{ background:#0b0b0f; border:1px dashed var(--line); border-radius:12px; padding:12px 14px; margin-top:18px; font-size:12.5px; color:var(--sub); line-height:1.5; }
+  /* onboarding */
+  .onboard{ position:fixed; inset:0; background:rgba(8,8,12,.96); z-index:80; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .onboard.off{ display:none; }
+  .obox{ max-width:540px; width:100%; text-align:center; }
+  .obox h2{ font-size:26px; font-weight:800; margin-bottom:8px; letter-spacing:-.5px; }
+  .obox p{ color:var(--sub); margin-bottom:28px; }
+  .nichegrid{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  .niche{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:22px; cursor:pointer; transition:.15s; text-align:left; }
+  .niche:hover{ border-color:var(--accent); transform:translateY(-3px); }
+  .niche .emo{ font-size:30px; }
+  .niche .nm{ font-weight:800; margin-top:8px; font-size:16px; }
+  .niche .ds{ color:var(--sub); font-size:12.5px; margin-top:4px; }
+  /* recommended accounts */
+  .nichebar{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+  .nichebar .tab{ background:var(--card); border:1px solid var(--line); color:var(--sub); padding:8px 14px; border-radius:999px; font-size:13px; font-weight:600; cursor:pointer; }
+  .nichebar .tab.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .recs{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-bottom:34px; }
+  .rec{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
+  .rec .rh{ display:flex; align-items:center; gap:10px; }
+  .rec .av{ width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#ff6b35,#E50914); display:flex; align-items:center; justify-content:center; font-weight:800; }
+  .rec .hn{ font-weight:700; font-size:14px; }
+  .rec .fo{ color:var(--sub); font-size:12px; }
+  .rec .why{ font-size:12.5px; color:#d7d7db; margin:12px 0; line-height:1.45; }
+  .rec .trend{ font-size:12px; color:#2de2e6; font-weight:700; }
+  .rec button{ width:100%; margin-top:12px; background:rgba(255,107,53,.12); color:var(--accent); border:1px solid rgba(255,107,53,.4); padding:9px; border-radius:9px; font-family:inherit; font-size:12.5px; font-weight:700; cursor:pointer; }
+  .rec button:hover{ background:var(--accent); color:#fff; }
 </style>
 </head>
 <body>
@@ -75,13 +101,14 @@
     <h1>📈 인스타 레퍼런스 모니터링</h1>
     <span class="badge">LIVE</span>
   </header>
-  <p class="sub">벤치마크 계정의 게시물 인게이지먼트를 추적하고, 어떤 콘텐츠가 뜨는지 분석합니다.</p>
+  <p class="sub" id="subtitle">관심 업종을 고르면, 그 분야에서 지금 뜨는 레퍼런스만 자동으로 모아드려요.</p>
 
-  <div class="searchbar">
-    <input id="acct" value="@netflix" placeholder="모니터링할 계정 입력 (예: @netflix)">
-    <button onclick="alert('데모 버전입니다. 실제 서비스에서는 입력한 계정의 최신 게시물을 실시간으로 불러옵니다.')">분석하기</button>
-  </div>
+  <div class="nichebar" id="nichebar"></div>
 
+  <h2 class="section">🎯 <span id="nicheLabel"></span> 추천 레퍼런스</h2>
+  <div class="recs" id="recs"></div>
+
+  <h2 class="section">📊 심층 분석 예시 — <span style="color:var(--red)">@netflix</span></h2>
   <div class="kpis" id="kpis"></div>
 
   <div class="insight" id="insight"></div>
@@ -99,6 +126,14 @@
   <div class="gallery" id="gallery"></div>
 
   <footer>데이터 출처: Instagram (Looter API) · @netflix 게시물 12건 · 데모</footer>
+</div>
+
+<div class="onboard" id="onboard">
+  <div class="obox">
+    <h2>👋 어떤 콘텐츠를 만드세요?</h2>
+    <p>업종을 고르면, 그 분야에서 지금 뜨는 레퍼런스만 자동으로 모아드려요.</p>
+    <div class="nichegrid" id="nichegrid"></div>
+  </div>
 </div>
 
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
@@ -235,6 +270,62 @@ function makeCard(i){
 }
 function closeModal(){ document.getElementById('overlay').classList.remove('on'); }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape')closeModal(); });
+
+// ── 업종 선택 → 맞춤 레퍼런스 자동 큐레이션 ──────────────────────────────────
+const NICHES = {
+  fashion:{emo:'👗',label:'패션',ds:'무신사·29CM 스타일',accounts:[
+    {h:'musinsa',f:'142만',why:'미니멀 룩북 캐러셀이 최근 인게이지 주도',trend:'+38% ▲ 2주'},
+    {h:'29cm.official',f:'98만',why:'에디토리얼 톤 + 여백 활용 레퍼런스',trend:'+22% ▲'},
+    {h:'stylenanda',f:'210만',why:'Y2K 컬러 팝 스타일 급상승',trend:'+51% ▲'},
+    {h:'wconcept',f:'76만',why:'브랜드 협업 카드뉴스 포맷 참고',trend:'+12% ▲'}]},
+  beauty:{emo:'💄',label:'뷰티',ds:'올리브영·로드샵',accounts:[
+    {h:'oliveyoung.official',f:'180만',why:'신제품 비교 카드뉴스 포맷 강세',trend:'+44% ▲'},
+    {h:'romand.official',f:'120만',why:'무드 컬러 스와치 레퍼런스',trend:'+29% ▲'},
+    {h:'3ce_official',f:'310만',why:'블랙 미니멀 럭셔리 톤',trend:'+18% ▲'},
+    {h:'amusekorea',f:'54만',why:'비건 클린뷰티 파스텔 무드',trend:'+33% ▲'}]},
+  cafe:{emo:'☕',label:'카페·디저트',ds:'카페·F&B 소상공인',accounts:[
+    {h:'starbuckskorea',f:'290만',why:'시즌 메뉴 출시 카드뉴스 정석',trend:'+27% ▲'},
+    {h:'baeminfood',f:'88만',why:'위트있는 카피+그래픽 밈 포맷',trend:'+62% ▲'},
+    {h:'ediya_coffee',f:'41만',why:'신메뉴 프로모션 레이아웃',trend:'+15% ▲'},
+    {h:'nudake_official',f:'33만',why:'아트 디저트 비주얼 레퍼런스',trend:'+40% ▲'}]},
+  ent:{emo:'🎬',label:'엔터·콘텐츠',ds:'OTT·미디어 (실데이터 분석 가능)',accounts:[
+    {h:'netflix',f:'3,200만',why:'밈+릴스 인게이지 폭발 — 아래 심층 분석 제공',trend:'+73% ▲',live:true},
+    {h:'tvn_drama',f:'140만',why:'드라마 명장면 카드 포맷',trend:'+25% ▲'},
+    {h:'watcha',f:'52만',why:'에디토리얼 추천 큐레이션 톤',trend:'+19% ▲'},
+    {h:'disneypluskr',f:'88만',why:'IP 캐릭터 중심 비주얼',trend:'+31% ▲'}]},
+};
+let current = 'ent';
+
+function renderNicheGrid(){
+  document.getElementById('nichegrid').innerHTML = Object.entries(NICHES).map(([k,n])=>`
+    <div class="niche" onclick="startApp('${k}')">
+      <div class="emo">${n.emo}</div><div class="nm">${n.label}</div><div class="ds">${n.ds}</div>
+    </div>`).join('');
+}
+function renderNicheBar(){
+  document.getElementById('nichebar').innerHTML = Object.entries(NICHES).map(([k,n])=>
+    `<div class="tab ${k===current?'active':''}" onclick="selectNiche('${k}')">${n.emo} ${n.label}</div>`).join('');
+}
+function renderRecs(){
+  const n = NICHES[current];
+  document.getElementById('nicheLabel').textContent = n.label;
+  document.getElementById('subtitle').textContent = `'${n.label}' 분야에서 지금 뜨는 레퍼런스 계정이에요. 마음에 드는 계정을 분석해보세요.`;
+  document.getElementById('recs').innerHTML = n.accounts.map(a=>`
+    <div class="rec">
+      <div class="rh"><div class="av">${a.h[0].toUpperCase()}</div>
+        <div><div class="hn">@${a.h}</div><div class="fo">팔로워 ${a.f}</div></div></div>
+      <div class="why">${a.why}</div>
+      <div class="trend">📈 인게이지먼트 ${a.trend}</div>
+      <button onclick="analyzeAcct('${a.h}',${a.live?true:false})">${a.live?'📊 심층 분석 보기':'분석하기'}</button>
+    </div>`).join('');
+}
+function selectNiche(k){ current=k; renderNicheBar(); renderRecs(); }
+function startApp(k){ document.getElementById('onboard').classList.add('off'); selectNiche(k); }
+function analyzeAcct(h, live){
+  if(live){ document.getElementById('kpis').scrollIntoView({behavior:'smooth'}); }
+  else{ alert(`데모 버전입니다.\n실제 서비스에서는 @${h}의 최신 게시물을 실시간으로 불러와 아래와 같은 심층 분석을 제공합니다.\n(현재는 @netflix 실데이터를 예시로 보여드려요)`); document.getElementById('kpis').scrollIntoView({behavior:'smooth'}); }
+}
+renderNicheGrid(); renderNicheBar(); renderRecs();
 </script>
 </body>
 </html>
