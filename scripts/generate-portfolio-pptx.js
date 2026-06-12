@@ -77,7 +77,10 @@ function title(slide, runs, opts = {}) {
   });
 }
 
-function footer(slide, page) {
+let _page = 1; // 표지=1, footer 호출 시마다 증가
+function footer(slide) {
+  _page += 1;
+  const page = String(_page).padStart(2, "0");
   slide.addShape(pptx.ShapeType.rect, {
     x: 0.9, y: 6.92, w: 0.35, h: 0.05,
     fill: { color: C.accent }, line: { type: "none" },
@@ -211,7 +214,55 @@ function chips(slide, items, x, y, w) {
     "“제가 직접 콘텐츠를 운영하며 겪고, 고객 인터뷰로 검증한 실제 문제에서 출발한 제품입니다.”",
     { x: 0.9, y: 5.55, w: 11.5, h: 0.6, fontFace: FONT, fontSize: 14, italic: true, color: C.muted }
   );
-  footer(s, "02");
+  footer(s);
+})();
+
+// ===========================================================================
+// SLIDE — AI 엔지니어링 역량 맵 (JD 요건 → 실제 구현 근거)
+// ===========================================================================
+(() => {
+  const s = pptx.addSlide();
+  base(s);
+  kicker(s, "AI Engineering · 채용 요건 매칭");
+  title(s, [
+    { text: "“기획한” 서비스가 아니라, ", options: { color: C.fg } },
+    { text: "직접 설계·구현·배포", options: { color: C.accent } },
+    { text: "한\nAI 시스템", options: { color: C.fg } },
+  ]);
+
+  const rows = [
+    ["OpenAI API 기반 AI 시스템", "GPT-4o Vision 분석 · 매칭 · 정보추출 파이프라인", "api/analyze · match · extract"],
+    ["LLM 기반 NLP / 정보추출(IE)", "structured outputs(JSON Schema)로 기사→카드 브리프 추출", "lib/extract.ts"],
+    ["클라우드 배포 · 운영", "Vercel · Railway · Neon(Postgres) 환경변수·DB 연동", "production"],
+    ["컨테이너 · 인프라", "멀티스테이지 Docker 빌드 · 배포 자동화", "Dockerfile"],
+  ];
+  rows.forEach((r, i) => {
+    const y = 3.0 + i * 0.82;
+    card(s, 0.9, y, 11.5, 0.7, C.bg2);
+    // 체크 배지
+    s.addShape(pptx.ShapeType.roundRect, {
+      x: 1.1, y: y + 0.19, w: 0.34, h: 0.34, rectRadius: 0.17,
+      fill: { color: C.good }, line: { type: "none" },
+    });
+    s.addText("✓", {
+      x: 1.1, y: y + 0.19, w: 0.34, h: 0.34, fontFace: FONT, fontSize: 13, bold: true,
+      color: "0E0E14", align: "center", valign: "middle",
+    });
+    s.addText(r[0], {
+      x: 1.6, y, w: 3.5, h: 0.7, fontFace: FONT, fontSize: 13, bold: true, color: C.fg, valign: "middle",
+    });
+    s.addText(r[1], {
+      x: 5.2, y, w: 5.2, h: 0.7, fontFace: FONT, fontSize: 11.5, color: C.muted, valign: "middle",
+    });
+    s.addText(r[2], {
+      x: 10.5, y, w: 1.85, h: 0.7, fontFace: FONT_MONO, fontSize: 9.5, color: C.accent2, valign: "middle", align: "right",
+    });
+  });
+
+  s.addText("JD의 OpenAI API · IE · 클라우드 배포 · Docker 요건을 실제 코드/배포로 증명 — 학습·서빙(PyTorch·서버리스)은 진행 중 로드맵.", {
+    x: 0.9, y: 6.35, w: 11.5, h: 0.5, fontFace: FONT, fontSize: 11.5, italic: true, color: C.dim,
+  });
+  footer(s);
 })();
 
 // ===========================================================================
@@ -258,7 +309,7 @@ function chips(slide, items, x, y, w) {
   s.addText("콘텐츠 아이디어(풍부함)  →  4단계 수작업(병목)  →  최종 업로드(느림)", {
     x: 0.9, y: 6.05, w: 6.0, h: 0.5, fontFace: FONT, fontSize: 12, color: C.dim, italic: true,
   });
-  footer(s, "03");
+  footer(s);
 })();
 
 // ===========================================================================
@@ -316,7 +367,7 @@ function chips(slide, items, x, y, w) {
     x: 7.0, y: 3.85, w: 5.4, h: 2.0, fontFace: FONT, fontSize: 14.5, color: C.fg,
     lineSpacingMultiple: 1.5, paraSpaceAfter: 10,
   });
-  footer(s, "04");
+  footer(s);
 })();
 
 // ===========================================================================
@@ -383,7 +434,7 @@ function chips(slide, items, x, y, w) {
   s.addText("총 소요 시간: 5분", {
     x: 7.25, y: 5.65, w: 4.85, h: 0.5, fontFace: FONT, fontSize: 14, bold: true, color: C.white, align: "center", valign: "middle",
   });
-  footer(s, "05");
+  footer(s);
 })();
 
 // ===========================================================================
@@ -439,7 +490,7 @@ function chips(slide, items, x, y, w) {
     "생성형 AI의 발전으로, 과거에는 불가능했던 '문맥 기반의 레이아웃 자동화'가 완전히 가능해졌습니다.",
     { x: 0.9, y: 5.85, w: 11.5, h: 0.6, fontFace: FONT, fontSize: 14, italic: true, color: C.muted, align: "center" }
   );
-  footer(s, "06");
+  footer(s);
 })();
 
 // ===========================================================================
@@ -474,7 +525,7 @@ function chips(slide, items, x, y, w) {
       x: 8.2, y, w: 4.0, h: 0.66, fontFace: FONT, fontSize: 11, color: C.muted, valign: "middle",
     });
   });
-  footer(s, "07");
+  footer(s);
 })();
 
 // ===========================================================================
@@ -518,7 +569,66 @@ function chips(slide, items, x, y, w) {
     { text: "+ ", options: { color: C.good } },
     { text: "feat: 카드 렌더를 클라이언트 Fabric.js 합성으로 교체 (#19)", options: { color: C.good } },
   ], { x: 1.15, y: 6.2, w: 11.0, h: 0.62, fontFace: FONT_MONO, fontSize: 10.5, valign: "middle" });
-  footer(s, "08");
+  footer(s);
+})();
+
+// ===========================================================================
+// SLIDE — 정보추출(IE) 파이프라인 (실제 구현)
+// ===========================================================================
+(() => {
+  const s = pptx.addSlide();
+  base(s);
+  kicker(s, "LLM Engineering · 정보추출(IE)");
+  title(s, [
+    { text: "자유형 텍스트를 ", options: { color: C.fg } },
+    { text: "결정적 구조 데이터", options: { color: C.accent } },
+    { text: "로\n변환하는 IE 파이프라인", options: { color: C.fg } },
+  ]);
+
+  const stages = [
+    { t: "Load", sub: "URL / 텍스트", d: "cheerio 본문·메타 추출" },
+    { t: "Clean", sub: "정제", d: "보일러플레이트 제거·길이 제한" },
+    { t: "Extract", sub: "GPT-4o-mini", d: "structured outputs\nJSON Schema(strict)" },
+    { t: "Verify", sub: "정합성", d: "슬라이드 역할 보정" },
+  ];
+  const n = stages.length;
+  const boxW = 2.55, gap = 0.32;
+  const totalW = n * boxW + (n - 1) * gap;
+  let x = (W - totalW) / 2;
+  const y = 3.15;
+  stages.forEach((st, i) => {
+    s.addShape(pptx.ShapeType.roundRect, {
+      x, y, w: boxW, h: 1.9, rectRadius: 0.12,
+      fill: { color: C.panel }, line: { color: C.accent, width: 1.3 },
+    });
+    s.addText(st.t, {
+      x, y: y + 0.18, w: boxW, h: 0.4, fontFace: FONT, fontSize: 16, bold: true, color: C.fg, align: "center",
+    });
+    s.addText(st.sub, {
+      x, y: y + 0.62, w: boxW, h: 0.3, fontFace: FONT_MONO, fontSize: 9.5, color: C.accent, align: "center",
+    });
+    s.addText(st.d, {
+      x: x + 0.12, y: y + 0.95, w: boxW - 0.24, h: 0.8, fontFace: FONT, fontSize: 10.5, color: C.muted, align: "center", lineSpacing: 14,
+    });
+    if (i < n - 1) {
+      s.addText("→", { x: x + boxW - 0.06, y, w: gap + 0.12, h: 1.9, fontFace: FONT, fontSize: 18, color: C.accent, align: "center", valign: "middle" });
+    }
+    x += boxW + gap;
+  });
+
+  // 출력 스키마 코드박스
+  s.addShape(pptx.ShapeType.roundRect, {
+    x: 0.9, y: 5.35, w: 11.5, h: 1.0, rectRadius: 0.08, fill: { color: "08080C" }, line: { color: C.line, width: 1 },
+  });
+  s.addText([
+    { text: "// POST /api/extract → CardBrief\n", options: { color: C.dim } },
+    { text: "{ headline, summary, key_points[], ", options: { color: "CDD3DF" } },
+    { text: "entities[]", options: { color: C.accent2 } },
+    { text: ", tone, ", options: { color: "CDD3DF" } },
+    { text: "slides[]", options: { color: C.accent2 } },
+    { text: " }  → 카드뉴스 컴포지터로 연결", options: { color: "CDD3DF" } },
+  ], { x: 1.2, y: 5.5, w: 11.0, h: 0.75, fontFace: FONT_MONO, fontSize: 11, valign: "middle", lineSpacing: 18 });
+  footer(s);
 })();
 
 // ===========================================================================
@@ -558,7 +668,7 @@ function chips(slide, items, x, y, w) {
     { text: "MCP로 디자인·DB·배포·문서를 한 창에서 연결한 '작업 비서' 워크플로우", options: { bullet: { code: "25B8", indent: 16 }, color: C.fg } },
     { text: "웹·모바일에서 브랜치·PR까지 — 로컬 터미널 없이 어디서든 개발 진행", options: { bullet: { code: "25B8", indent: 16 }, color: C.fg } },
   ], { x: 0.9, y: 5.65, w: 11.5, h: 1.2, fontFace: FONT, fontSize: 13, lineSpacingMultiple: 1.4 });
-  footer(s, "09");
+  footer(s);
 })();
 
 // ===========================================================================
@@ -616,7 +726,7 @@ function chips(slide, items, x, y, w) {
       x: 7.9, y, w: 4.4, h: 0.6, fontFace: FONT, fontSize: 12, color: C.fg, valign: "middle",
     });
   });
-  footer(s, "10");
+  footer(s);
 })();
 
 // ===========================================================================
