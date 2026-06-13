@@ -16,6 +16,7 @@
 
 import OpenAI from 'openai';
 import * as cheerio from 'cheerio';
+import { extractStructured, type ExtractMode, type UpstageFile } from './upstage';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'dummy_key' });
 
@@ -167,4 +168,52 @@ export async function runExtraction(input: string): Promise<CardBrief> {
   const brief = await extractBrief(cleaned);
   const verified = verifyBrief(brief);
   return { ...verified, source: { url, title } };
+}
+
+/**
+ * 문서/이미지(스펙시트·보도자료·스크린샷·PDF) → CardBrief 파이프라인.
+ *
+ * Upstage Universal IE 를 프런트엔드로 써서 문서를 구조화 데이터로 만든 뒤,
+ * 그 데이터를 텍스트로 직렬화해 기존 OpenAI 카피라이팅 단계(extractBrief)에
+ * 그대로 흘려보낸다. 즉 Upstage = 문서 이해, OpenAI = 카드뉴스 기획.
+ *
+ *   1) Upstage   — 자동 생성 스키마로 구조화 필드 추출 (기본 async)
+ *   2) serialize — 추출 필드를 사람이 읽는 텍스트로 평탄화
+ *   3) extract   — 기존 structured-outputs 카피라이터로 CardBrief 작성
+ *   4) verify    — cover/cta 역할 정합성 보정
+ */
+export async function runDocumentExtraction(
+  file: UpstageFile,
+  opts: { mode?: ExtractMode } = {},
+): Promise<CardBrief> {
+  const { data } = await extractStructured(file, { mode: opts.mode });
+  const serialized = serializeStructured(data);
+  const cleaned = cleanText(serialized);
+  if (cleaned.length < 20) throw new Error('문서에서 추출된 내용이 부족합니다');
+  const brief = await extractBrief(cleaned);
+  const verified = verifyBrief(brief);
+  return { ...verified, source: { title: file.filename } };
+}
+
+/** 추출된 구조화 필드를 "key: value" 라인들로 평탄화 (LLM 입력용). */
+export function serializeStructured(data: Record<string, unknown>, prefix = ''): string {
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(data)) {
+    const label = prefix ? `${prefix}.${key}` : key;
+    if (value == null || value === '') continue;
+    if (Array.isArray(value)) {
+      value.forEach((v, i) => {
+        if (v && typeof v === 'object') {
+          lines.push(serializeStructured(v as Record<string, unknown>, `${label}[${i}]`));
+        } else {
+          lines.push(`${label}[${i}]: ${String(v)}`);
+        }
+      });
+    } else if (typeof value === 'object') {
+      lines.push(serializeStructured(value as Record<string, unknown>, label));
+    } else {
+      lines.push(`${label}: ${String(value)}`);
+    }
+  }
+  return lines.filter(Boolean).join('\n');
 }
