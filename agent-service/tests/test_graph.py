@@ -27,10 +27,24 @@ def _state(**kw):
 def test_pipeline_runs_all_nodes():
     state = _state()
     seen = [name for name, _ in run_linear(state)]
-    assert seen[:6] == ["planner", "retriever", "copywriter", "designer", "image_gen", "art_director"]
+    assert seen[:3] == ["planner", "retriever", "copywriter"]
+    assert seen[-1] == "collect"
     assert len(state["plan"]) == 3
     assert len(state["examples"]) > 0
     assert state["image_prompt"]
+
+
+def test_fan_out_renders_one_card_per_slide():
+    state = _state(num_slides=4)
+    seen = [name for name, _ in run_linear(state)]
+    # One render_slide branch per slide, then a single fan-in.
+    assert seen.count("render_slide") == 4
+    assert seen.count("collect") == 1
+    cards = state["final_cards"]
+    assert len(cards) == 4
+    # Branches fan back in ordered, and each slide got its own background prompt.
+    assert [c["index"] for c in cards] == [0, 1, 2, 3]
+    assert all(c["image_prompt"] for c in cards)
 
 
 def test_rag_returns_templates():

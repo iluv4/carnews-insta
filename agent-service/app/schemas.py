@@ -1,7 +1,8 @@
 """Request/response models and the shared LangGraph state."""
 from __future__ import annotations
 
-from typing import Any, Optional, TypedDict
+import operator
+from typing import Annotated, Any, Optional, TypedDict
 from pydantic import BaseModel, Field
 
 
@@ -50,19 +51,27 @@ class AgentState(TypedDict, total=False):
     examples: list[dict[str, Any]]
     # copywriter
     copy: dict[str, Any]
-    # designer
+    # designer / image / critic — these hold the *current slide's* working values
+    # (a single card during a render_slide fan-out branch, or the cover for the
+    # backward-compatible single-card view exposed by `collect`).
     design_brief: dict[str, Any]
     image_prompt: str
-    # image generation
     card_image_b64: Optional[str]
-    # art director critic
     critique: dict[str, Any]
     score: float
-    # reviser loop bookkeeping
+    # reviser loop bookkeeping (per render_slide branch)
     revision: int
     max_revisions: int
     threshold: float
     revision_notes: list[str]
+    # fan-out: which slide this branch is rendering
+    index: int
+    # Per-slide outputs accumulated from the parallel render_slide branches.
+    # operator.add is the LangGraph reducer that concatenates each branch's
+    # one-item list into the shared state instead of overwriting it.
+    cards: Annotated[list[dict[str, Any]], operator.add]
+    # `collect` writes the index-sorted, finished deck here.
+    final_cards: list[dict[str, Any]]
     # diagnostics
     provider: str
     error: Optional[str]
