@@ -100,6 +100,9 @@ async def _stream(req: GenerateRequest) -> AsyncGenerator[str, None]:
         {
             "copy": state.get("copy"),
             "examples": state.get("examples"),
+            # The whole deck — one rendered background per slide.
+            "cards": state.get("final_cards", []),
+            # Cover-based single-card view, kept for backward compatibility.
             "image_prompt": state.get("image_prompt"),
             "card_image_b64": state.get("card_image_b64"),
             "score": state.get("score"),
@@ -110,11 +113,21 @@ async def _stream(req: GenerateRequest) -> AsyncGenerator[str, None]:
     )
 
 
+def _slim_card(card: dict) -> dict:
+    c = dict(card)
+    if c.get("card_image_b64"):
+        c["card_image_b64"] = f"<{len(c['card_image_b64'])} bytes>"
+    return c
+
+
 def _slim(partial: dict) -> dict:
-    """Drop the heavy base64 payload from per-node SSE updates."""
+    """Drop the heavy base64 payloads from per-node SSE updates."""
     out = dict(partial)
     if out.get("card_image_b64"):
         out["card_image_b64"] = f"<{len(out['card_image_b64'])} bytes>"
+    for key in ("cards", "final_cards"):
+        if isinstance(out.get(key), list):
+            out[key] = [_slim_card(c) for c in out[key]]
     return out
 
 

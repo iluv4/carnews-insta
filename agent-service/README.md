@@ -14,25 +14,38 @@ two talk over HTTP/SSE.
 ## The graph
 
 ```
-planner → retriever → copywriter → designer → image_gen → art_director
-                          ▲                                    │
-                          └──────────── reviser ◄──────────────┘   (loop)
-                                           │
-                                          END   (score ≥ threshold or max revisions)
+planner → retriever → copywriter ─┬─▶ render_slide ─┐
+                                  ├─▶ render_slide ─┼─▶ collect → END
+                                  └─▶ render_slide ─┘
+                                   (one branch per slide, in parallel)
+
+each render_slide branch:
+    designer → image_gen → art_director
+        ▲                       │
+        └──── reviser ◄─────────┘   (loop until score ≥ threshold or max revisions)
 ```
 
 | Node | Model | Job |
 |------|-------|-----|
 | `planner` | GPT-5.5 | topic → per-slide role + intent |
 | `retriever` | embeddings | **RAG**: top-k similar real templates (pgvector or in-process) |
-| `copywriter` | GPT-5.5 | slide copy, grounded in retrieved exemplars |
-| `designer` | GPT-5.5 | art-direction prompt for the image model |
-| `image_gen` | **gpt-image-2** | text-free background render (Korean text is overlaid by the client, never baked — diffusion garbles Korean glyphs) |
-| `art_director` | GPT-5.5 vision | scores the background against a rubric (penalises any stray text) |
-| `reviser` | — | turns critic fixes into next-pass instructions, loops back |
+| `copywriter` | GPT-5.5 | copy for **every** slide, grounded in retrieved exemplars |
+| *(fan-out)* | — | `Send` dispatches one `render_slide` branch per slide, run in parallel |
+| `render_slide` | — | one card end-to-end (designer → image_gen → art_director → reviser loop) |
+| └ `designer` | GPT-5.5 | art-direction prompt for the image model |
+| └ `image_gen` | **gpt-image-2** | text-free background render (Korean text is overlaid by the client, never baked — diffusion garbles Korean glyphs) |
+| └ `art_director` | GPT-5.5 vision | scores the background against a rubric (penalises any stray text) |
+| └ `reviser` | — | turns critic fixes into next-pass instructions, loops back |
+| `collect` | — | fans the finished cards back in, ordered (deck score = weakest slide) |
 
-The `art_director → reviser → designer` cycle is the point: a one-shot generator
-can't self-correct; this graph re-renders until the card clears the quality bar.
+Two things are the point here:
+
+1. The per-card `art_director → reviser → designer` **cycle** — a one-shot
+   generator can't self-correct; each branch re-renders until its card clears
+   the quality bar.
+2. The **fan-out**: `num_slides` slides are rendered as parallel `render_slide`
+   branches (LangGraph's `Send` map-reduce), so an N-slide deck costs roughly the
+   wall-clock time of one card instead of N.
 
 ## Run
 
@@ -51,7 +64,10 @@ RAG), so `GET /healthz`, `GET /rag/info`, and `POST /generate` all work in dev.
 - `GET /healthz` — liveness + which models/back-ends are active
 - `GET /rag/info` — templates indexed + retrieval backend
 - `POST /generate` — `{ "topic", "num_slides", "brand?", "audience?", "render_image?" }`
-  → **SSE** stream: `start` → `node` (one per graph step) → `done`
+  → **SSE** stream: `start` → `node` (one per graph step; `render_slide` fires
+  once per slide) → `done`. The `done` payload carries `cards` — the full deck,
+  one rendered background per slide — plus a cover-based single-card view
+  (`card_image_b64`, `score`, …) kept for backward compatibility.
 
 ## Tests
 

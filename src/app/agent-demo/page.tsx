@@ -8,9 +8,20 @@ import { PERSONAS } from '@/lib/prompts';
 // service) and shows each graph node firing in real time, then the final card.
 type NodeEvent = { node: string; update: Record<string, unknown> };
 
+type SlideCard = {
+  index: number;
+  role?: string;
+  copy?: CoverCopy;
+  image_prompt?: string;
+  card_image_b64?: string | null;
+  score?: number;
+};
+
 type DonePayload = {
   copy?: { slides?: Array<Record<string, unknown>> };
   examples?: Array<{ template_id: string; score: number; summary: string }>;
+  // The full deck — one rendered background per slide (fan-out result).
+  cards?: SlideCard[];
   image_prompt?: string;
   card_image_b64?: string | null;
   score?: number;
@@ -364,12 +375,35 @@ export default function AgentDemoPage() {
 
           {/* Text is rendered as a crisp CSS overlay — never baked into the
               image — so Korean glyphs stay sharp and never garble. The diffusion
-              output (if any) is used only as a text-free background. */}
-          <CardPreview
-            imageB64={done.card_image_b64 ?? null}
-            cover={(done.copy?.slides?.[0] ?? {}) as CoverCopy}
-            brand={(done.copy?.slides?.[0] as CoverCopy | undefined)?.brand}
-          />
+              output (if any) is used only as a text-free background. The deck is
+              the fan-out result: one rendered card per slide. */}
+          {done.cards && done.cards.length > 0 ? (
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
+              {done.cards.map((card) => {
+                const cover = (card.copy ?? {}) as CoverCopy;
+                return (
+                  <figure key={card.index} style={{ margin: 0 }}>
+                    <CardPreview
+                      imageB64={card.card_image_b64 ?? null}
+                      cover={cover}
+                      brand={cover.brand}
+                    />
+                    <figcaption style={{ color: '#888', fontSize: 12, marginTop: 4 }}>
+                      슬라이드 {card.index + 1}
+                      {card.role ? ` · ${card.role}` : ''}
+                      {typeof card.score === 'number' ? ` · 점수 ${card.score}` : ''}
+                    </figcaption>
+                  </figure>
+                );
+              })}
+            </div>
+          ) : (
+            <CardPreview
+              imageB64={done.card_image_b64 ?? null}
+              cover={(done.copy?.slides?.[0] ?? {}) as CoverCopy}
+              brand={(done.copy?.slides?.[0] as CoverCopy | undefined)?.brand}
+            />
+          )}
           {!done.card_image_b64 && (
             <p style={{ color: '#999', marginTop: 8, fontSize: 12 }}>
               (배경 이미지 없음 — OPENAI_API_KEY 미설정 시 카피 오버레이만 미리보기)
