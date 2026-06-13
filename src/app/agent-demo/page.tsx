@@ -14,6 +14,8 @@ type DonePayload = {
   image_prompt?: string;
   card_image_b64?: string | null;
   score?: number;
+  text_score?: number;
+  ocr_text?: string;
   critique?: Record<string, unknown>;
   revisions?: number;
   provider?: string;
@@ -26,10 +28,10 @@ type CoverCopy = {
   brand?: string;
 };
 
-// Renders the cover copy as a crisp typographic overlay on top of the
-// (text-free) background image. This is the whole point of the redesign:
-// diffusion models garble baked-in Korean, so the text is composited in the
-// browser where it stays pixel-sharp and fully controllable.
+// Bake-in pivot (2026-06-13): the card now arrives with its Korean text already
+// rendered INTO the image, so we show it as-is — no CSS text overlay (that would
+// double the text). The copy overlay below is only a no-key dev fallback, used
+// when the image model didn't run and we have copy but no pixels.
 function CardPreview({
   imageB64,
   cover,
@@ -39,6 +41,27 @@ function CardPreview({
   cover: CoverCopy;
   brand?: string;
 }) {
+  // Real (baked) card: the image IS the finished card. Display it untouched.
+  if (imageB64) {
+    return (
+      <img
+        src={`data:image/png;base64,${imageB64}`}
+        alt={cover.title || '생성된 카드'}
+        style={{
+          marginTop: 12,
+          width: 360,
+          aspectRatio: '2 / 3',
+          objectFit: 'cover',
+          borderRadius: 12,
+          border: '1px solid #eee',
+          display: 'block',
+        }}
+      />
+    );
+  }
+
+  // ── Dev fallback only (no OPENAI_API_KEY → no image): preview the copy as a
+  //    CSS overlay so the page is still useful offline. Never shown in prod.
   const title = cover.title || '제목 미리보기';
   const subtitle = cover.subtitle || '';
   const footer = cover.footer || '';
@@ -120,8 +143,9 @@ const NODE_LABEL: Record<string, string> = {
   planner: '🧭 Planner — 슬라이드 구성',
   retriever: '🔎 Retriever — RAG 검색',
   copywriter: '✍️ Copywriter — 카피 생성',
-  designer: '🎨 Designer — 이미지 프롬프트',
-  image_gen: '🖼️ Image — 배경 생성(텍스트 제외)',
+  designer: '🎨 Designer — 카드 프롬프트(텍스트 박기)',
+  image_gen: '🖼️ Image — 완성 카드 생성(텍스트 포함)',
+  ocr_gate: '🔡 OCR Gate — 글자 정확도 검증',
   art_director: '🧐 Art Director — 비평/채점',
   reviser: '🔁 Reviser — 수정 지시(루프)',
 };
@@ -219,9 +243,9 @@ export default function AgentDemoPage() {
       />
       <h1 style={{ fontSize: 24, fontWeight: 800 }}>🤖 Agentic Card-News (RAG + LangGraph)</h1>
       <p style={{ color: '#666', marginTop: 4 }}>
-        Planner → Retriever(RAG) → Copywriter → Designer → 배경 이미지 → Art Director → (loop)
+        Planner → Retriever(RAG) → Copywriter → Designer → 완성 카드 → OCR Gate → Art Director → (loop)
         <br />
-        <span style={{ fontSize: 12 }}>※ 한국어 텍스트는 이미지에 굽지 않고 브라우저에서 또렷한 타이포로 오버레이</span>
+        <span style={{ fontSize: 12 }}>※ 한국어 텍스트를 이미지에 직접 굽고(박기), OCR 게이트가 글자 정확도를 검증해 통과할 때까지 재생성</span>
       </p>
 
       {/* 페르소나(역할) 선택 — 누르면 다듬기 단계에서 해당 역할이 자동 부여된다. */}
@@ -346,7 +370,8 @@ export default function AgentDemoPage() {
         <section style={{ marginTop: 24 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700 }}>결과</h2>
           <p style={{ color: '#666' }}>
-            점수 <b>{done.score ?? '—'}</b> · 수정 횟수 {done.revisions ?? 0} · provider {done.provider}
+            디자인 <b>{done.score ?? '—'}</b> · 글자정확도{' '}
+            <b>{done.text_score ?? '—'}</b> · 수정 {done.revisions ?? 0}회 · provider {done.provider}
           </p>
 
           {done.examples && done.examples.length > 0 && (
@@ -362,9 +387,8 @@ export default function AgentDemoPage() {
             </details>
           )}
 
-          {/* Text is rendered as a crisp CSS overlay — never baked into the
-              image — so Korean glyphs stay sharp and never garble. The diffusion
-              output (if any) is used only as a text-free background. */}
+          {/* Baked card: the Korean text is rendered INTO the image and the
+              OCR gate has verified it. We display the finished pixels as-is. */}
           <CardPreview
             imageB64={done.card_image_b64 ?? null}
             cover={(done.copy?.slides?.[0] ?? {}) as CoverCopy}
@@ -372,7 +396,7 @@ export default function AgentDemoPage() {
           />
           {!done.card_image_b64 && (
             <p style={{ color: '#999', marginTop: 8, fontSize: 12 }}>
-              (배경 이미지 없음 — OPENAI_API_KEY 미설정 시 카피 오버레이만 미리보기)
+              (완성 카드 없음 — OPENAI_API_KEY 미설정 시 카피 오버레이만 미리보기)
             </p>
           )}
 

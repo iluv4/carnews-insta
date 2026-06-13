@@ -53,8 +53,13 @@ class AgentState(TypedDict, total=False):
     # designer
     design_brief: dict[str, Any]
     image_prompt: str
+    intended_text: list[str]   # the exact strings that must appear in the baked card
     # image generation
     card_image_b64: Optional[str]
+    # ocr gate (text-fidelity check on the baked card)
+    ocr_text: str
+    text_score: float
+    text_issues: list[str]
     # art director critic
     critique: dict[str, Any]
     score: float
@@ -62,6 +67,7 @@ class AgentState(TypedDict, total=False):
     revision: int
     max_revisions: int
     threshold: float
+    text_threshold: float
     revision_notes: list[str]
     # diagnostics
     provider: str

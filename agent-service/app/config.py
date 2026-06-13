@@ -48,6 +48,12 @@ class Settings(BaseModel):
     # threshold or we hit max_revisions. This is the core "self-improving" loop.
     quality_threshold: float = float(os.getenv("AGENT_QUALITY_THRESHOLD", "8.0"))
     max_revisions: int = int(os.getenv("AGENT_MAX_REVISIONS", "2"))
+    # Because we now BAKE the Korean copy into the image, "did the text render
+    # correctly?" is its own gate. The ocr_gate node transcribes the rendered
+    # card and diffs it against the intended copy; a card below this fidelity
+    # threshold (0–10) loops back for a re-render even if it's visually pretty.
+    # Set high — for baked text, "almost right" spelling is a publish blocker.
+    text_threshold: float = float(os.getenv("AGENT_TEXT_THRESHOLD", "9.0"))
 
     @property
     def has_openai(self) -> bool:

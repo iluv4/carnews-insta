@@ -27,10 +27,24 @@ def _state(**kw):
 def test_pipeline_runs_all_nodes():
     state = _state()
     seen = [name for name, _ in run_linear(state)]
-    assert seen[:6] == ["planner", "retriever", "copywriter", "designer", "image_gen", "art_director"]
+    assert seen[:7] == [
+        "planner", "retriever", "copywriter", "designer", "image_gen", "ocr_gate", "art_director",
+    ]
     assert len(state["plan"]) == 3
     assert len(state["examples"]) > 0
     assert state["image_prompt"]
+    # Baked-text pivot: the designer now names the exact strings to render, and
+    # the ocr_gate exposes a text-fidelity score.
+    assert state["intended_text"]
+    assert "text_score" in state
+
+
+def test_ocr_gate_diffs_against_intended_text():
+    from app.nodes.ocr_gate import ocr_gate
+
+    # No image / no key → fails open (doesn't block the loop).
+    out = ocr_gate({"intended_text": ["제주도 흑돼지"], "card_image_b64": None})
+    assert out["text_score"] >= 9.0
 
 
 def test_rag_returns_templates():
