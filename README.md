@@ -13,12 +13,15 @@
 
 ---
 
-## 🏆 Key Accomplishments (V2.2 Update)
+## 🏆 Key Accomplishments (V3 — Agentic Update)
 
-### 1. 차세대 이미지 생성 엔진: GPT Image-2 (DALL·E 3 HD)
-- **Extreme Quality**: DALL-E 3 **HD 모드** 및 **Vivid 스타일** 강제 적용으로 잡티 없는 8K급 그래픽 품질 구현.
-- **Art Direction Prompting**: "Studio Lighting", "Octane Render", "Professional Magazine Aesthetic" 등 전문가용 키워드 주입으로 생성 퀄리티 극대화.
-- **Zero Artifacts**: 배경에 불필요한 기호나 텍스트가 생기지 않도록 Negative Constraints 정밀 제어.
+### 1. RAG + 멀티에이전트 생성 파이프라인 (LangGraph)
+- **검색 기반 생성(RAG)**: 저장된 45개 실제 인스타 템플릿을 임베딩해 주제와 유사한
+  디자인을 검색하고, 그 결과를 카피/디자인 생성의 few-shot 근거로 사용합니다.
+  (기존 `/api/match`의 "이름만 보고 추측"을 실제 벡터 검색으로 대체)
+- **자기수정 루프**: `art_director`(GPT-5.2 비전) 비평 → `reviser` → 재생성으로,
+  품질 점수가 임계값을 넘을 때까지 카드를 다시 만듭니다. (단방향 1패스 → 피드백 루프)
+- **풀카드 이미지 생성**: `gpt-image-2`로 한국어 텍스트까지 박힌 카드를 한 번에 생성.
 
 ### 2. "Wowed" UX: Instant Quick Test
 - **One-Click Magic**: 업종별 추천 버튼 클릭 시 URL 입력부터 이미지 추출까지 **즉시 실행**.
@@ -56,10 +59,19 @@
 ---
 
 ## 🏗️ Architecture & Tech Stack
-- **Framework**: `Next.js 16 (App Router)`, `React 19`
-- **Database**: `Prisma 7 (Latest)`, `PostgreSQL (Neon)`
-- **AI Models**: `OpenAI GPT-4o (Vision Analysis)`, `GPT Image-2 / DALL-E 3 (HD Quality Mode)`
-- **Design Core**: `Fabric.js` (Custom Professional Design Engine)
+
+Two services: the **Next.js web app** (UI · auth · DB · canvas render) and a
+**Python `agent-service` (FastAPI + LangGraph)** that runs the RAG + multi-agent
+graph. See [`docs/AGENT_ARCHITECTURE.md`](docs/AGENT_ARCHITECTURE.md).
+
+- **Web**: `Next.js 16 (App Router)`, `React 19`, `Fabric.js` canvas renderer
+- **Agent service**: `FastAPI`, `LangGraph` (stateful graph with a critique→revision loop)
+- **Database**: `Prisma 7`, `PostgreSQL (Neon)` + `pgvector` for RAG retrieval
+- **AI Models (2026-06)**: `GPT-5.5` (reasoning/copy), `GPT-5.2` (vision critic),
+  `gpt-image-2` (full-card image generation), `text-embedding-3-large` (RAG)
+
+> Models are env-overridable (`AGENT_TEXT_MODEL`, `AGENT_VISION_MODEL`,
+> `AGENT_IMAGE_MODEL`) — nothing is hard-pinned to a snapshot.
 
 ---
 
