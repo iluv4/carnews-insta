@@ -1,4 +1,8 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": false
+  },
   "functions": {
     "src/app/api/render-card/route.ts": {
       "maxDuration": 60
