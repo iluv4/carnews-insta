@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import type OpenAIType from 'openai';
+import { buildAmazonCopyMessages } from '@/lib/prompts';
 
 export const maxDuration = 120;
 
@@ -78,35 +80,17 @@ async function generateAmazonCopy(
   const OpenAI = (await import('openai')).default;
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  const langGuide = lang === 'ja' ? '日本語で' : lang === 'ko' ? '한국어로' : 'in English';
-
   const res = await openai.chat.completions.create({
     model: 'gpt-4.1-mini',
     response_format: { type: 'json_object' },
-    messages: [
-      {
-        role: 'system',
-        content: `You are an Amazon product listing copywriter. Generate ${langGuide} marketing copy for Amazon product images. Return JSON.`,
-      },
-      {
-        role: 'user',
-        content: `Product: ${productName}
-Brand: ${brand}
-Key Ingredients: ${ingredients}
-Benefits: ${benefits}
-How to Use: ${howToUse}
-
-Generate Amazon listing image copy. Return JSON with this exact structure:
-{
-  "slide1": { "brand": "...", "productName": "...", "tagline": "..." },
-  "slide2": { "header": "...", "points": [{"icon": "✓", "title": "...", "desc": "..."}] (4 items) },
-  "slide3": { "header": "...", "mainIngredient": "...", "details": [{"name": "...", "pct": "...", "benefit": "..."}] (3 items) },
-  "slide4": { "header": "HOW TO USE", "steps": [{"no": "01", "title": "...", "desc": "..."}] (3 items) },
-  "slide5": { "header": "...", "beforeLabel": "...", "afterLabel": "...", "result1": "...", "result2": "..." },
-  "slide6": { "header": "...", "claim": "...", "sub": "..." }
-}`,
-      },
-    ],
+    messages: buildAmazonCopyMessages({
+      productName,
+      brand,
+      ingredients,
+      benefits,
+      howToUse,
+      lang,
+    }) as OpenAIType.Chat.ChatCompletionMessageParam[],
   });
 
   return JSON.parse(res.choices[0].message.content!) as AmazonCopy;
