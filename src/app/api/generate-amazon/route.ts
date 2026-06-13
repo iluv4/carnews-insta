@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type OpenAIType from 'openai';
 import { buildAmazonCopyMessages } from '@/lib/prompts';
+import { MODELS, chatTuning } from '@/lib/models';
 
 export const maxDuration = 120;
 
@@ -81,8 +82,11 @@ async function generateAmazonCopy(
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   const res = await openai.chat.completions.create({
-    model: 'gpt-4.1-mini',
+    model: MODELS.copy,
     response_format: { type: 'json_object' },
+    // Six-slide JSON payload — give the visible output ample room on top of the
+    // reasoning headroom the shim already adds.
+    ...chatTuning(MODELS.copy, { maxOutputTokens: 1500 }),
     messages: buildAmazonCopyMessages({
       productName,
       brand,

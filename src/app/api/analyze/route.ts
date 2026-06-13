@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { getCachedAnalysis, setCachedAnalysis } from '@/lib/analysisCache';
 import { fallbackLayout } from '@/lib/fabricSpec';
 import { buildLayoutMessages } from '@/lib/prompts';
+import { MODELS, chatTuning } from '@/lib/models';
 
 export const maxDuration = 60;
 
@@ -48,9 +49,9 @@ export async function POST(req: Request) {
 
     const slice = imageUrls.slice(0, 3);
     const res = await openai.chat.completions.create({
-      model: 'gpt-4.1-mini',
+      model: MODELS.vision,
       response_format: { type: 'json_object' },
-      max_tokens: 1200,
+      ...chatTuning(MODELS.vision, { maxOutputTokens: 1200 }),
       messages: buildLayoutMessages(slice) as OpenAI.Chat.ChatCompletionMessageParam[],
     });
 

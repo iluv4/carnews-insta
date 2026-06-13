@@ -2,7 +2,8 @@
 
 All model ids and tunables are env-overridable so we never hard-pin a model
 that gets deprecated. Defaults reflect the strongest OpenAI models available
-as of 2026-06 (GPT-5.5 reasoning, GPT-5.2 vision, gpt-image-2 generation).
+as of 2026-06: GPT-5.5 (a text+vision multimodal reasoning model, used for both
+reasoning and the vision critic) and gpt-image-2 for full-card generation.
 """
 from __future__ import annotations
 
@@ -16,11 +17,16 @@ class Settings(BaseModel):
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     # Reasoning / copywriting / planning model.
     text_model: str = os.getenv("AGENT_TEXT_MODEL", "gpt-5.5")
-    # Vision model used by the Art Director critic.
-    vision_model: str = os.getenv("AGENT_VISION_MODEL", "gpt-5.2")
+    # Vision model used by the Art Director critic. gpt-5.5 is multimodal and a
+    # generation ahead of gpt-5.2 — the critic that gates the self-revision loop
+    # should be at least as strong as the model producing the copy.
+    vision_model: str = os.getenv("AGENT_VISION_MODEL", "gpt-5.5")
     # Full-card image generation (text baked into the image — user's choice).
     image_model: str = os.getenv("AGENT_IMAGE_MODEL", "gpt-image-2")
     image_size: str = os.getenv("AGENT_IMAGE_SIZE", "1024x1536")  # 2:3 card
+    # gpt-image-2 quality: low|medium|high|auto. "high" runs the deepest
+    # inference path → sharpest detail and best Korean text rendering.
+    image_quality: str = os.getenv("AGENT_IMAGE_QUALITY", "high")
     embed_model: str = os.getenv("AGENT_EMBED_MODEL", "text-embedding-3-large")
 
     # --- RAG ---

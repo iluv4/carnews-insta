@@ -8,6 +8,7 @@ import {
   SubjectBrief,
   SlideRole,
 } from '@/lib/fabricSpec';
+import { MODELS, chatTuning } from '@/lib/models';
 
 // Fast path: NO image generation, NO headless Chromium.
 // The model returns structured copy; buildFabricSpec emits a declarative spec
@@ -16,7 +17,6 @@ import {
 export const maxDuration = 60;
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'dummy_key' });
-const MODEL = 'gpt-4.1-mini';
 
 function hasKey(): boolean {
   const k = process.env.OPENAI_API_KEY;
@@ -71,9 +71,11 @@ async function analyseSubject(photoB64: string): Promise<SubjectBrief> {
   if (!hasKey() || !photoB64) return fallback;
   try {
     const res = await openai.chat.completions.create({
-      model: MODEL,
+      model: MODELS.vision,
       response_format: { type: 'json_object' },
-      max_tokens: 220,
+      // Short structured brief; 'low' effort keeps this fast since it runs once
+      // per request and gates every slide's copy.
+      ...chatTuning(MODELS.vision, { maxOutputTokens: 220, reasoningEffort: 'low' }),
       messages: [
         { role: 'system', content: 'You output ONLY JSON. No markdown.' },
         {
@@ -141,10 +143,9 @@ async function generateCopy(opts: {
   if (!hasKey()) return FALLBACK_COPY;
   try {
     const res = await openai.chat.completions.create({
-      model: MODEL,
+      model: MODELS.copy,
       response_format: { type: 'json_object' },
-      temperature: 0.8,
-      max_tokens: 400,
+      ...chatTuning(MODELS.copy, { maxOutputTokens: 400, temperature: 0.8 }),
       messages: [
         { role: 'system', content: 'You output ONLY JSON. No markdown.' },
         { role: 'user', content: copyPrompt(opts) },
