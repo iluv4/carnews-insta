@@ -35,9 +35,10 @@ try:
     from langgraph.graph import END, START, StateGraph
 
     try:  # Send moved across minor versions; support both.
-        from langgraph.types import Send
+        from langgraph.types import Send, interrupt
     except Exception:  # pragma: no cover
         from langgraph.constants import Send
+        from langgraph.types import interrupt
     _HAS_LANGGRAPH = True
 except Exception:  # pragma: no cover - allows import without the dep installed
     _HAS_LANGGRAPH = False
@@ -53,12 +54,15 @@ def _route_after_critic(state: AgentState) -> Literal["reviser", "done"]:
     return "done"
 
 
-def _slide_seed(state: AgentState, index: int, slide: dict) -> AgentState:
+def _slide_seed(
+    state: AgentState, index: int, slide: dict, notes: list[str] | None = None
+) -> AgentState:
     """Build the isolated working state handed to one render_slide branch.
 
     Each branch sees only its single slide (as the cover of a 1-slide `copy`), so
     the existing designer/critic nodes operate on it unchanged, plus the shared
-    grounding (retrieved examples, brand) and a fresh revision counter.
+    grounding (retrieved examples, brand) and a fresh revision counter. `notes`
+    seeds the reviser channel so a human's fixes steer a re-render.
     """
     s = get_settings()
     return {
@@ -70,7 +74,7 @@ def _slide_seed(state: AgentState, index: int, slide: dict) -> AgentState:
         "copy": {"slides": [slide]},
         "render_image": state.get("render_image", True),
         "revision": 0,
-        "revision_notes": [],
+        "revision_notes": [str(n) for n in (notes or [])],
         "threshold": float(state.get("threshold", s.quality_threshold)),
         "max_revisions": int(state.get("max_revisions", s.max_revisions)),
     }
@@ -137,7 +141,55 @@ def _dispatch(state: AgentState):
     return [Send("render_slide", _slide_seed(state, i, s)) for i, s in enumerate(slides)]
 
 
-def build_graph():
+def review_gate(state: AgentState) -> AgentState:
+    """Human-in-the-loop pause point (opt-in via `review_enabled`).
+
+    With review off this is a no-op and the deck finishes automatically (the old
+    behaviour). With it on, `interrupt()` suspends the graph here and surfaces the
+    rendered deck to the caller; the run resumes from this node once a decision
+    arrives via /resume. A checkpointer is required for the pause to persist.
+    """
+    if not state.get("review_enabled"):
+        return {}
+    cards = state.get("final_cards", [])
+    decision = interrupt(
+        {
+            "type": "deck_review",
+            "ask": "각 슬라이드를 검수하세요. approve 하거나 revise(notes/slides)로 수정 지시하세요.",
+            "score": state.get("score"),
+            "cards": cards,
+        }
+    )
+    return {"review": decision if isinstance(decision, dict) else {}}
+
+
+def _review_decision(state: AgentState) -> Literal["approve", "revise"]:
+    """Pure routing decision (testable without langgraph)."""
+    if not state.get("review_enabled"):
+        return "approve"
+    review = state.get("review") or {}
+    if review.get("action") == "revise" and (review.get("notes") or review.get("slides")):
+        return "revise"
+    return "approve"
+
+
+def _route_after_review(state: AgentState):
+    """approve → END; revise → re-render only the requested slides (Send)."""
+    if _review_decision(state) == "approve":
+        return END
+    review = state.get("review") or {}
+    notes = [str(n) for n in (review.get("notes") or [])]
+    slides = (state.get("copy", {}) or {}).get("slides") or []
+    targets = review.get("slides")
+    indices = targets if isinstance(targets, list) and targets else list(range(len(slides)))
+    return [
+        Send("render_slide", _slide_seed(state, i, slides[i], notes))
+        for i in indices
+        if 0 <= i < len(slides)
+    ]
+
+
+def build_graph(checkpointer=None):
     if not _HAS_LANGGRAPH:
         raise RuntimeError("langgraph is not installed")
     g = StateGraph(AgentState)
@@ -146,14 +198,18 @@ def build_graph():
     g.add_node("copywriter", copywriter)
     g.add_node("render_slide", render_slide)
     g.add_node("collect", collect)
+    g.add_node("review_gate", review_gate)
 
     g.add_edge(START, "planner")
     g.add_edge("planner", "retriever")
     g.add_edge("retriever", "copywriter")
     g.add_conditional_edges("copywriter", _dispatch, ["render_slide"])
     g.add_edge("render_slide", "collect")
-    g.add_edge("collect", END)
-    return g.compile()
+    g.add_edge("collect", "review_gate")
+    g.add_conditional_edges("review_gate", _route_after_review, ["render_slide", END])
+    # A checkpointer is needed for the review interrupt to suspend/resume; without
+    # one the graph still runs straight through (review off).
+    return g.compile(checkpointer=checkpointer)
 
 
 def run_linear(state: AgentState):

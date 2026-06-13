@@ -15,9 +15,9 @@ two talk over HTTP/SSE.
 
 ```
 planner → retriever → copywriter ─┬─▶ render_slide ─┐
-                                  ├─▶ render_slide ─┼─▶ collect → END
-                                  └─▶ render_slide ─┘
-                                   (one branch per slide, in parallel)
+                                  ├─▶ render_slide ─┼─▶ collect → review_gate ─▶ END (approve)
+                                  └─▶ render_slide ─┘                  │
+                                   (one branch per slide, in parallel)  └──▶ render_slide (revise)
 
 each render_slide branch:
     designer → image_gen → art_director
@@ -37,8 +37,9 @@ each render_slide branch:
 | └ `art_director` | GPT-5.5 vision | scores the background against a rubric (penalises any stray text) |
 | └ `reviser` | — | turns critic fixes into next-pass instructions, loops back |
 | `collect` | — | fans the finished cards back in, ordered (deck score = weakest slide) |
+| `review_gate` | — | **human-in-the-loop** (opt-in): `interrupt()` pauses for approve / partial revise |
 
-Two things are the point here:
+Three things are the point here:
 
 1. The per-card `art_director → reviser → designer` **cycle** — a one-shot
    generator can't self-correct; each branch re-renders until its card clears
@@ -46,6 +47,11 @@ Two things are the point here:
 2. The **fan-out**: `num_slides` slides are rendered as parallel `render_slide`
    branches (LangGraph's `Send` map-reduce), so an N-slide deck costs roughly the
    wall-clock time of one card instead of N.
+3. The **human-in-the-loop** gate (set `review: true`): `interrupt()` + a
+   checkpointer pause the graph after the deck so a person can approve or send
+   fixes. A `revise` decision re-renders **only the selected slides** (the `cards`
+   reducer merges by index), then pauses again — loop until approved. Off by
+   default, so the one-shot path is unchanged.
 
 ## Run
 
@@ -63,11 +69,19 @@ RAG), so `GET /healthz`, `GET /rag/info`, and `POST /generate` all work in dev.
 
 - `GET /healthz` — liveness + which models/back-ends are active
 - `GET /rag/info` — templates indexed + retrieval backend
-- `POST /generate` — `{ "topic", "num_slides", "brand?", "audience?", "render_image?" }`
-  → **SSE** stream: `start` → `node` (one per graph step; `render_slide` fires
-  once per slide) → `done`. The `done` payload carries `cards` — the full deck,
-  one rendered background per slide — plus a cover-based single-card view
-  (`card_image_b64`, `score`, …) kept for backward compatibility.
+- `POST /generate` — `{ "topic", "num_slides", "brand?", "audience?", "render_image?", "review?" }`
+  → **SSE** stream: `start` (carries a `thread_id`) → `node` (one per graph step;
+  `render_slide` fires once per slide) → `done`. The `done` payload carries
+  `cards` — the full deck, one rendered background per slide — plus a cover-based
+  single-card view (`card_image_b64`, `score`, …) kept for backward compatibility.
+  When `review: true`, the stream ends in a **`review`** event instead of `done`
+  (`{ thread_id, cards, score, ask }`) — the run is paused awaiting a decision.
+- `POST /resume` — `{ "thread_id", "decision" }` resumes a paused run.
+  `decision` = `{ "action": "approve" }` to finish, or
+  `{ "action": "revise", "notes": [...], "slides": [0,2] }` to re-render those
+  slides (omit `slides` to revise all). Streams the same events; ends in `done`
+  on approval or another `review` after a revise. Requires langgraph (the
+  checkpointer-backed graph); returns 400 otherwise.
 
 ## Tests
 
@@ -76,4 +90,5 @@ python -m pytest tests/         # or: python -c "import tests.test_graph as t; .
 ```
 
 Tests run fully offline (fallback paths), asserting node order, RAG retrieval,
-and the critic routing logic.
+the critic routing logic, the review-gate routing, and the full interrupt →
+partial-revise → approve human-in-the-loop cycle.

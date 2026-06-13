@@ -6,7 +6,12 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app.graph import run_linear, _route_after_critic  # noqa: E402
+from app.graph import (  # noqa: E402
+    run_linear,
+    _route_after_critic,
+    _review_decision,
+    _HAS_LANGGRAPH,
+)
 from app.rag.store import get_store  # noqa: E402
 
 
@@ -58,3 +63,54 @@ def test_critic_route_triggers_revision_when_below_threshold():
     assert _route_after_critic(_state(score=3.0, revision=0, max_revisions=2)) == "reviser"
     assert _route_after_critic(_state(score=9.0, revision=0, max_revisions=2)) == "done"
     assert _route_after_critic(_state(score=3.0, revision=2, max_revisions=2)) == "done"
+
+
+def test_review_decision_routing():
+    # Review off → always auto-approve (backward compatible).
+    assert _review_decision({"review_enabled": False}) == "approve"
+    # On + approve / on + revise with a target.
+    assert _review_decision({"review_enabled": True, "review": {"action": "approve"}}) == "approve"
+    assert (
+        _review_decision({"review_enabled": True, "review": {"action": "revise", "slides": [1]}})
+        == "revise"
+    )
+    assert (
+        _review_decision({"review_enabled": True, "review": {"action": "revise", "notes": ["x"]}})
+        == "revise"
+    )
+    # revise with nothing to change → no-op approve.
+    assert _review_decision({"review_enabled": True, "review": {"action": "revise"}}) == "approve"
+
+
+def test_human_in_the_loop_interrupt_resume():
+    """End-to-end: pause for review, partially revise, then approve (needs langgraph)."""
+    if not _HAS_LANGGRAPH:
+        return
+    from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.types import Command
+
+    from app.graph import build_graph
+
+    g = build_graph(checkpointer=MemorySaver())
+    cfg = {"configurable": {"thread_id": "test-hitl"}}
+    init = {**_state(num_slides=3), "review_enabled": True, "review": {}}
+
+    chunks = list(g.stream(init, cfg, stream_mode="updates"))
+    assert any("__interrupt__" in c for c in chunks)        # paused at the gate
+    assert g.get_state(cfg).next == ("review_gate",)
+    assert len(g.get_state(cfg).values["final_cards"]) == 3
+
+    # Revise only slide 1 → re-renders that card, pauses for re-review.
+    list(
+        g.stream(
+            Command(resume={"action": "revise", "slides": [1], "notes": ["배경 더 밝게"]}),
+            cfg,
+            stream_mode="updates",
+        )
+    )
+    assert g.get_state(cfg).next == ("review_gate",)
+    assert len(g.get_state(cfg).values["final_cards"]) == 3   # merged, not duplicated
+
+    # Approve → run finishes.
+    list(g.stream(Command(resume={"action": "approve"}), cfg, stream_mode="updates"))
+    assert g.get_state(cfg).next == ()

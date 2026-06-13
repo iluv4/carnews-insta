@@ -30,6 +30,15 @@ type DonePayload = {
   provider?: string;
 };
 
+// Payload of the `review` SSE event — the graph paused at the human-in-the-loop
+// gate with the rendered deck, waiting for an approve/revise decision.
+type ReviewPayload = {
+  thread_id: string;
+  ask?: string;
+  score?: number;
+  cards?: SlideCard[];
+};
+
 type CoverCopy = {
   title?: string;
   subtitle?: string;
@@ -135,6 +144,9 @@ const NODE_LABEL: Record<string, string> = {
   image_gen: '🖼️ Image — 배경 생성(텍스트 제외)',
   art_director: '🧐 Art Director — 비평/채점',
   reviser: '🔁 Reviser — 수정 지시(루프)',
+  render_slide: '🃏 Render Slide — 슬라이드 카드(병렬)',
+  collect: '📚 Collect — 덱 취합/정렬',
+  review_gate: '⏸ Review Gate — 사람 검수 대기',
 };
 
 export default function AgentDemoPage() {
@@ -144,6 +156,12 @@ export default function AgentDemoPage() {
   const [events, setEvents] = useState<NodeEvent[]>([]);
   const [done, setDone] = useState<DonePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Human-in-the-loop review state.
+  const [review, setReview] = useState(false); // opt-in 검수 모드
+  const [pending, setPending] = useState<ReviewPayload | null>(null); // 검수 대기 중인 덱
+  const [reviseSel, setReviseSel] = useState<number[]>([]); // 다시 만들 슬라이드 index
+  const [reviseNotes, setReviseNotes] = useState(''); // 사람 수정 지시
 
   // 프롬프트 다듬기 상태: 선택한 페르소나, 다듬는 중 여부, 변경 설명, 되돌리기용 원본.
   const [personaId, setPersonaId] = useState(PERSONAS[0].id);
@@ -180,44 +198,82 @@ export default function AgentDemoPage() {
     setRefineNote(null);
   }
 
+  // Reads an SSE stream from /generate or /resume and routes each event. A run
+  // ends either at `done` (finished) or `review` (paused for human approval).
+  async function consumeSSE(res: Response) {
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { done: streamDone, value } = await reader.read();
+      if (streamDone) break;
+      buf += decoder.decode(value, { stream: true });
+      const chunks = buf.split('\n\n');
+      buf = chunks.pop() ?? '';
+      for (const chunk of chunks) {
+        const evLine = chunk.split('\n').find((l) => l.startsWith('event:'));
+        const dataLine = chunk.split('\n').find((l) => l.startsWith('data:'));
+        if (!evLine || !dataLine) continue;
+        const event = evLine.slice(6).trim();
+        const data = JSON.parse(dataLine.slice(5).trim());
+        if (event === 'node') setEvents((prev) => [...prev, data as NodeEvent]);
+        else if (event === 'review') setPending(data as ReviewPayload);
+        else if (event === 'done') {
+          setDone(data as DonePayload);
+          setPending(null);
+        }
+      }
+    }
+  }
+
   async function run() {
     setRunning(true);
     setEvents([]);
     setDone(null);
     setError(null);
+    setPending(null);
     try {
       const res = await fetch('/api/agent-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, num_slides: numSlides }),
+        body: JSON.stringify({ topic, num_slides: numSlides, review }),
       });
       if (!res.ok || !res.body) {
         const e = await res.json().catch(() => ({ error: res.statusText }));
         throw new Error(e.error || 'request failed');
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-      for (;;) {
-        const { done: streamDone, value } = await reader.read();
-        if (streamDone) break;
-        buf += decoder.decode(value, { stream: true });
-        const chunks = buf.split('\n\n');
-        buf = chunks.pop() ?? '';
-        for (const chunk of chunks) {
-          const evLine = chunk.split('\n').find((l) => l.startsWith('event:'));
-          const dataLine = chunk.split('\n').find((l) => l.startsWith('data:'));
-          if (!evLine || !dataLine) continue;
-          const event = evLine.slice(6).trim();
-          const data = JSON.parse(dataLine.slice(5).trim());
-          if (event === 'node') setEvents((prev) => [...prev, data as NodeEvent]);
-          else if (event === 'done') setDone(data as DonePayload);
-        }
-      }
+      await consumeSSE(res);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setRunning(false);
+    }
+  }
+
+  // Sends the reviewer's decision and resumes the paused run on the same thread.
+  async function resume(decision: Record<string, unknown>) {
+    if (!pending || running) return;
+    setRunning(true);
+    setError(null);
+    const threadId = pending.thread_id;
+    setPending(null);
+    try {
+      const res = await fetch('/api/agent-resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_id: threadId, decision }),
+      });
+      if (!res.ok || !res.body) {
+        const e = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(e.error || 'resume failed');
+      }
+      await consumeSSE(res);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRunning(false);
+      setReviseSel([]);
+      setReviseNotes('');
     }
   }
 
@@ -316,6 +372,14 @@ export default function AgentDemoPage() {
         </button>
       </div>
 
+      {/* Human-in-the-loop opt-in: pause after the deck for human approval. */}
+      <label
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 13, color: '#555', cursor: 'pointer' }}
+      >
+        <input type="checkbox" checked={review} onChange={(e) => setReview(e.target.checked)} />
+        ⏸ 검수 모드 — 덱 생성 후 사람이 승인/수정 (human-in-the-loop)
+      </label>
+
       {refineNote && (
         <p style={{ fontSize: 13, color: '#555', marginTop: 8 }}>
           {refineNote.startsWith('⚠️') ? refineNote : `✨ ${refineNote}`}
@@ -339,6 +403,90 @@ export default function AgentDemoPage() {
       )}
 
       {error && <p style={{ color: '#c00', marginTop: 12 }}>⚠️ {error}</p>}
+
+      {/* 검수 대기 패널 — 그래프가 interrupt 로 멈춘 상태. 사람이 승인하거나
+          수정할 슬라이드를 골라 지시를 보내면 /resume 로 재개된다. */}
+      {pending && (
+        <section
+          style={{ marginTop: 24, border: '2px solid #ea580c', borderRadius: 12, padding: 16, background: '#fff7ed' }}
+        >
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: '#9a3412' }}>
+            ⏸ 검수 대기 {typeof pending.score === 'number' ? `· 덱 점수 ${pending.score}` : ''}
+          </h2>
+          <p style={{ fontSize: 13, color: '#9a3412', marginTop: 4 }}>
+            {pending.ask || '승인하거나, 다시 만들 슬라이드를 선택하고 수정 지시를 입력하세요.'}
+          </p>
+
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
+            {(pending.cards ?? []).map((card) => {
+              const cover = (card.copy ?? {}) as CoverCopy;
+              const selected = reviseSel.includes(card.index);
+              return (
+                <figure key={card.index} style={{ margin: 0 }}>
+                  <CardPreview imageB64={card.card_image_b64 ?? null} cover={cover} brand={cover.brand} />
+                  <figcaption style={{ marginTop: 6, fontSize: 12, color: '#9a3412' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={(e) =>
+                          setReviseSel((prev) =>
+                            e.target.checked
+                              ? [...prev, card.index]
+                              : prev.filter((i) => i !== card.index),
+                          )
+                        }
+                      />
+                      슬라이드 {card.index + 1} 다시
+                      {card.role ? ` · ${card.role}` : ''}
+                      {typeof card.score === 'number' ? ` · ${card.score}` : ''}
+                    </label>
+                  </figcaption>
+                </figure>
+              );
+            })}
+          </div>
+
+          <textarea
+            value={reviseNotes}
+            onChange={(e) => setReviseNotes(e.target.value)}
+            placeholder="수정 지시 (예: 배경을 더 밝게, 톤을 차분하게) — 비워두면 선택한 슬라이드만 재생성"
+            rows={2}
+            style={{ width: '100%', marginTop: 12, padding: 10, border: '1px solid #fdba74', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
+          />
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button
+              onClick={() => resume({ action: 'approve' })}
+              disabled={running}
+              style={{ padding: '10px 18px', borderRadius: 8, border: 0, background: '#16a34a', color: '#fff', fontWeight: 700, cursor: running ? 'default' : 'pointer' }}
+            >
+              ✅ 전체 승인
+            </button>
+            <button
+              onClick={() =>
+                resume({
+                  action: 'revise',
+                  ...(reviseSel.length ? { slides: [...reviseSel].sort((a, b) => a - b) } : {}),
+                  notes: reviseNotes.trim() ? [reviseNotes.trim()] : [],
+                })
+              }
+              disabled={running || (reviseSel.length === 0 && !reviseNotes.trim())}
+              style={{
+                padding: '10px 18px',
+                borderRadius: 8,
+                border: 0,
+                background: running || (reviseSel.length === 0 && !reviseNotes.trim()) ? '#fdba74' : '#ea580c',
+                color: '#fff',
+                fontWeight: 700,
+                cursor: running || (reviseSel.length === 0 && !reviseNotes.trim()) ? 'default' : 'pointer',
+              }}
+            >
+              🔁 수정 요청 (재생성)
+            </button>
+          </div>
+        </section>
+      )}
 
       {events.length > 0 && (
         <section style={{ marginTop: 24 }}>
