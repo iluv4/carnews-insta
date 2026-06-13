@@ -8,6 +8,7 @@ import { useTab } from '@/context/TabContext';
 import PortalDashboard from './PortalDashboard';
 import CardCanvas from './CardCanvas';
 import type { FabricSpec } from '@/lib/fabricSpec';
+import { proxiedImageUrl } from '@/lib/imageProxy';
 
 
 interface Template {
@@ -334,8 +335,7 @@ export default function CardGenerator() {
   };
 
   const imgUrlToBase64 = (imgUrl: string): Promise<string> => {
-    const isInstagramUrl = imgUrl.includes('instagram.com') || imgUrl.includes('cdninstagram.com');
-    const proxyUrl = isInstagramUrl ? `/api/proxy?url=${encodeURIComponent(imgUrl)}` : imgUrl;
+    const proxyUrl = proxiedImageUrl(imgUrl);
 
     return new Promise<string>((resolve, reject) => {
       const img = new Image();
@@ -468,8 +468,7 @@ export default function CardGenerator() {
     try {
       let href = url;
       if (!url.startsWith('data:')) {
-        const isInstagram = url.includes('instagram.com') || url.includes('cdninstagram.com');
-        const fetchUrl = isInstagram ? `/api/proxy?url=${encodeURIComponent(url)}` : url;
+        const fetchUrl = proxiedImageUrl(url);
         const res = await fetch(fetchUrl);
         const blob = await res.blob();
         href = URL.createObjectURL(blob);
