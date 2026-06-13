@@ -233,6 +233,14 @@ async function htmlToImage(html: string): Promise<string> {
   let headless: any = true;
 
   if (!executablePath) {
+    // @sparticuz/chromium only extracts its bundled shared libraries (libnss3.so,
+    // etc.) and sets LD_LIBRARY_PATH when AWS_EXECUTION_ENV marks a Node Lambda
+    // runtime. Vercel doesn't set it to a matching value, so without this the
+    // binary extracts but can't launch ("libnss3.so: cannot open shared object
+    // file"). Reconstruct it from the actual runtime so the matching lib pack
+    // (al2 for Node 18, al2023 for Node 20/22) is inflated. Must run before import.
+    const nodeMajor = process.versions.node.split('.')[0];
+    process.env.AWS_EXECUTION_ENV = `AWS_Lambda_nodejs${nodeMajor}.x`;
     const chromium = (await import('@sparticuz/chromium')).default;
     executablePath = await chromium.executablePath();
     launchArgs = chromium.args;

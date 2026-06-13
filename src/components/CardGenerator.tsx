@@ -523,6 +523,11 @@ export default function CardGenerator() {
 
   const handleGenerate = async () => {
     if (!jsonlData && !selectedTemplateId) return;
+    if (!theme.trim()) {
+      setStatusText('내용을 입력해주세요');
+      setCurrentStep(2);
+      return;
+    }
     setGenerating(true);
     setProgress(0);
     setResultSpecs([]);
