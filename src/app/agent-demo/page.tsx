@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { PERSONAS } from '@/lib/prompts';
 
 // Self-contained demo of the RAG + multi-agent pipeline. Streams Server-Sent
 // Events from /api/agent-generate (which proxies the FastAPI + LangGraph
@@ -35,6 +36,41 @@ export default function AgentDemoPage() {
   const [events, setEvents] = useState<NodeEvent[]>([]);
   const [done, setDone] = useState<DonePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 프롬프트 다듬기 상태: 선택한 페르소나, 다듬는 중 여부, 변경 설명, 되돌리기용 원본.
+  const [personaId, setPersonaId] = useState(PERSONAS[0].id);
+  const [refining, setRefining] = useState(false);
+  const [refineNote, setRefineNote] = useState<string | null>(null);
+  const [prevTopic, setPrevTopic] = useState<string | null>(null);
+
+  async function refine() {
+    if (!topic.trim() || refining) return;
+    setRefining(true);
+    setRefineNote(null);
+    try {
+      const res = await fetch('/api/refine-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: topic, personaId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'refine failed');
+      setPrevTopic(topic);
+      setTopic(data.refined);
+      setRefineNote(data.notes || `${data.persona?.label ?? ''} 관점으로 다듬었어요.`);
+    } catch (e) {
+      setRefineNote(`⚠️ 다듬기 실패: ${(e as Error).message}`);
+    } finally {
+      setRefining(false);
+    }
+  }
+
+  function undoRefine() {
+    if (prevTopic === null) return;
+    setTopic(prevTopic);
+    setPrevTopic(null);
+    setRefineNote(null);
+  }
 
   async function run() {
     setRunning(true);
@@ -84,13 +120,62 @@ export default function AgentDemoPage() {
         Planner → Retriever(RAG) → Copywriter → Designer → gpt-image-2 → Art Director → (loop)
       </p>
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+      {/* 페르소나(역할) 선택 — 누르면 다듬기 단계에서 해당 역할이 자동 부여된다. */}
+      <div style={{ marginTop: 16 }}>
+        <p style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>
+          ① 나는 누구? (역할을 고르면 그 관점으로 다듬어져요)
+        </p>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {PERSONAS.map((p) => {
+            const active = p.id === personaId;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setPersonaId(p.id)}
+                title={p.guide}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 999,
+                  border: active ? '1px solid #111' : '1px solid #ddd',
+                  background: active ? '#111' : '#fff',
+                  color: active ? '#fff' : '#333',
+                  fontSize: 13,
+                  fontWeight: active ? 700 : 500,
+                  cursor: 'pointer',
+                }}
+              >
+                {p.emoji} {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <p style={{ fontSize: 13, color: '#666', margin: '16px 0 6px' }}>
+        ② 주제를 대충 적고 ✨ 다듬기를 눌러보세요
+      </p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
-          placeholder="주제를 입력하세요"
+          placeholder="대충 입력해도 돼요 (예: 신형 전기차 나옴)"
           style={{ flex: 1, minWidth: 240, padding: 10, border: '1px solid #ddd', borderRadius: 8 }}
         />
+        <button
+          onClick={refine}
+          disabled={refining || running || !topic.trim()}
+          style={{
+            padding: '10px 16px',
+            borderRadius: 8,
+            border: '1px solid #111',
+            background: '#fff',
+            color: refining || !topic.trim() ? '#999' : '#111',
+            fontWeight: 700,
+            cursor: refining || !topic.trim() ? 'default' : 'pointer',
+          }}
+        >
+          {refining ? '다듬는 중…' : '✨ 다듬기'}
+        </button>
         <input
           type="number"
           min={1}
@@ -115,6 +200,28 @@ export default function AgentDemoPage() {
           {running ? '생성 중…' : '생성'}
         </button>
       </div>
+
+      {refineNote && (
+        <p style={{ fontSize: 13, color: '#555', marginTop: 8 }}>
+          {refineNote.startsWith('⚠️') ? refineNote : `✨ ${refineNote}`}
+          {prevTopic !== null && (
+            <button
+              onClick={undoRefine}
+              style={{
+                marginLeft: 8,
+                padding: '2px 8px',
+                borderRadius: 6,
+                border: '1px solid #ddd',
+                background: '#fff',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              되돌리기
+            </button>
+          )}
+        </p>
+      )}
 
       {error && <p style={{ color: '#c00', marginTop: 12 }}>⚠️ {error}</p>}
 
