@@ -73,6 +73,11 @@ graph. See [`docs/AGENT_ARCHITECTURE.md`](docs/AGENT_ARCHITECTURE.md).
 > Models are env-overridable (`AGENT_TEXT_MODEL`, `AGENT_VISION_MODEL`,
 > `AGENT_IMAGE_MODEL`) — nothing is hard-pinned to a snapshot.
 
+### 🔍 AI Pipelines (LLM Engineering)
+- **`/api/analyze`** — GPT-4o **Vision** 기반 레퍼런스 → 구조화 레이아웃 템플릿(JSON) 추출.
+- **`/api/extract`** — 뉴스 URL/텍스트 → **structured outputs(JSON Schema strict)** 로 카드뉴스 브리프를 추출하는 **정보추출(IE) 파이프라인** (`load → clean → extract → verify`). 구현: `src/lib/extract.ts`.
+- **`/api/match`** — 테마 기반 최적 디자인 템플릿 선택(LLM 라우팅).
+
 ---
 
 ## 👨‍💻 Team Collaboration
