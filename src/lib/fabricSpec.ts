@@ -88,6 +88,40 @@ function alignFromPos(pos: Pos): 'left' | 'center' | 'right' {
   return 'left';
 }
 
+// ── Text-wrap estimation ──────────────────────────────────────────────────
+// The spec is built server-side with no canvas to measure glyphs, yet blocks
+// must stack without overlapping once Fabric wraps long lines. We approximate
+// each glyph's advance as a fraction of fontSize: Korean/CJK glyphs are nearly
+// full-width, Latin/punct are roughly half, spaces narrower. This lets us guess
+// how many lines a string wraps to and advance a vertical cursor accordingly.
+function glyphAdvance(ch: string, fontSize: number): number {
+  if (ch === ' ') return fontSize * 0.3;
+  const code = ch.codePointAt(0) ?? 0;
+  const fullWidth =
+    (code >= 0x1100 && code <= 0x11ff) || // Hangul Jamo
+    (code >= 0x2e80 && code <= 0x9fff) || // CJK radicals…ideographs (incl. Kana)
+    (code >= 0xac00 && code <= 0xd7a3) || // Hangul syllables
+    (code >= 0xf900 && code <= 0xfaff) || // CJK compatibility
+    (code >= 0xff00 && code <= 0xff60) || // full-width forms
+    code >= 0x1f000; // emoji / pictographs (rough)
+  return fullWidth ? fontSize * 1.0 : fontSize * 0.52;
+}
+
+function estimateLines(text: string, fontSize: number, maxWidth: number): number {
+  if (!text) return 0;
+  // Honor explicit newlines, then wrap each segment by accumulated glyph width.
+  // 0.98 leaves slack because greedy wrapping rarely fills a line completely.
+  return text.split('\n').reduce((sum, seg) => {
+    let w = 0;
+    for (const ch of seg) w += glyphAdvance(ch, fontSize);
+    return sum + Math.max(1, Math.ceil(w / (maxWidth * 0.98)));
+  }, 0);
+}
+
+function blockHeight(text: string, fontSize: number, maxWidth: number, lineHeight: number): number {
+  return estimateLines(text, fontSize, maxWidth) * fontSize * lineHeight;
+}
+
 export function buildFabricSpec(
   layout: LayoutTemplate,
   slideIndex: number,
@@ -113,8 +147,16 @@ export function buildFabricSpec(
   const titleAnchor = anchorXY(slideMeta.title.pos, CARD_W, CARD_H);
   const titleAlign = alignFromPos(slideMeta.title.pos);
   const titleFontSize = 84;
+  const titleLineHeight = 1.2;
   const titleColor = slideMeta.title.color || palette.text || '#ffffff';
   const titleWidth = CARD_W - PAD * 2;
+
+  // Lay the title block out with a vertical cursor so the accent bar, the
+  // (possibly multi-line) title, and the subtitle never overlap.
+  let titleCursorY = titleAnchor.y;
+  const titleH = copy.title
+    ? blockHeight(copy.title, titleFontSize, titleWidth, titleLineHeight)
+    : 0;
 
   if (slideMeta.title.accent_bar === 'left') {
     objects.push({
@@ -122,7 +164,8 @@ export function buildFabricSpec(
       left: titleAnchor.x - 24,
       top: titleAnchor.y - 8,
       width: 8,
-      height: titleFontSize * 2.4,
+      // Match the real (wrapped) title height instead of a fixed 2-line guess.
+      height: Math.max(titleH, titleFontSize) + 16,
       fill: titleColor,
     });
   }
@@ -131,24 +174,25 @@ export function buildFabricSpec(
     objects.push({
       type: 'text',
       left: titleAnchor.x,
-      top: titleAnchor.y,
+      top: titleCursorY,
       text: copy.title,
       fontSize: titleFontSize,
       fontWeight: weightTitle,
       fill: titleColor,
       fontFamily,
       textAlign: titleAlign,
-      lineHeight: 1.2,
+      lineHeight: titleLineHeight,
       width: titleWidth,
       shadow: '2px 2px 8px rgba(0,0,0,0.5)',
     });
+    titleCursorY += titleH + 28; // gap below title
   }
 
   if (copy.subtitle) {
     objects.push({
       type: 'text',
       left: titleAnchor.x,
-      top: titleAnchor.y + titleFontSize * 2.6,
+      top: titleCursorY,
       text: copy.subtitle,
       fontSize: 44,
       fontWeight: weightBody,
@@ -166,22 +210,44 @@ export function buildFabricSpec(
   const bodyColor = slideMeta.body.color || palette.text || '#ffffff';
 
   if (slideMeta.body.style === 'emoji-bullet' && copy.bullets && copy.bullets.length > 0) {
-    const lineH = 90;
-    copy.bullets.slice(0, 4).forEach((line, i) => {
+    const bullets = copy.bullets.slice(0, 4);
+    const bodyWidth = CARD_W - PAD * 2;
+    const bulletLineHeight = 1.3;
+    const bulletGap = 28; // breathing room between separate bullets
+    let bulletFont = 44;
+
+    // Auto-shrink so the stacked, wrapped bullets fit the space below the
+    // anchor. A bullet that wraps to 2 lines is ~2× tall, so fixed spacing
+    // would collide — we measure each, sum, and scale the font down if needed.
+    const measure = (font: number) =>
+      bullets.reduce(
+        (sum, line) => sum + blockHeight(line, font, bodyWidth, bulletLineHeight) + bulletGap,
+        0
+      ) - bulletGap;
+    const available = CARD_H - PAD - bodyAnchor.y;
+    let total = measure(bulletFont);
+    if (total > available) {
+      bulletFont = Math.max(30, Math.floor(bulletFont * (available / total)));
+      total = measure(bulletFont);
+    }
+
+    let by = bodyAnchor.y;
+    bullets.forEach((line) => {
       objects.push({
         type: 'text',
         left: bodyAnchor.x,
-        top: bodyAnchor.y + i * lineH,
+        top: by,
         text: line,
-        fontSize: 44,
+        fontSize: bulletFont,
         fontWeight: weightBody,
         fill: bodyColor,
         fontFamily,
         textAlign: bodyAlign,
-        lineHeight: 1.3,
-        width: CARD_W - PAD * 2,
+        lineHeight: bulletLineHeight,
+        width: bodyWidth,
         shadow: '1px 1px 4px rgba(0,0,0,0.5)',
       });
+      by += blockHeight(line, bulletFont, bodyWidth, bulletLineHeight) + bulletGap;
     });
   } else if (slideMeta.body.style === 'paragraph' && copy.bullets) {
     objects.push({
