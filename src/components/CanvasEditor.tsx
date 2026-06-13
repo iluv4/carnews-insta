@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as fabric from 'fabric';
 import styles from './CanvasEditor.module.css';
+import { proxiedImageUrl } from '@/lib/imageProxy';
 
 interface CanvasEditorProps {
   imageUrl: string;
@@ -23,7 +24,7 @@ export default function CanvasEditor({ imageUrl, onDownloadComplete }: CanvasEdi
       backgroundColor: '#f8fafc',
     });
 
-    fabric.Image.fromURL(imageUrl, {
+    fabric.Image.fromURL(proxiedImageUrl(imageUrl), {
       crossOrigin: 'anonymous'
     }).then((img) => {
       img.scaleToWidth(500);

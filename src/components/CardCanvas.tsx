@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import * as fabric from 'fabric';
 import type { FabricSpec, FabricObjSpec } from '@/lib/fabricSpec';
+import { proxiedImageUrl } from '@/lib/imageProxy';
 
 interface CardCanvasProps {
   spec: FabricSpec;
@@ -11,7 +12,7 @@ interface CardCanvasProps {
 }
 
 function placeBackgroundImage(canvas: fabric.Canvas, src: string, fit: 'cover' | 'contain') {
-  return fabric.Image.fromURL(src, { crossOrigin: 'anonymous' }).then((img) => {
+  return fabric.Image.fromURL(proxiedImageUrl(src), { crossOrigin: 'anonymous' }).then((img) => {
     if (!img) return;
     const scale =
       fit === 'cover'
@@ -75,7 +76,7 @@ function addObject(canvas: fabric.Canvas, obj: FabricObjSpec) {
     } as any);
     canvas.add(t);
   } else if (obj.type === 'image') {
-    fabric.Image.fromURL(obj.src, { crossOrigin: 'anonymous' }).then((img) => {
+    fabric.Image.fromURL(proxiedImageUrl(obj.src), { crossOrigin: 'anonymous' }).then((img) => {
       if (!img) return;
       img.set({
         left: obj.left,
