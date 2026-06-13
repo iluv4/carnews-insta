@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { MODELS, chatTuning } from '@/lib/models';
 
 export const maxDuration = 60;
 
@@ -73,8 +74,9 @@ async function generateCopy(theme: string, clientContext: string): Promise<{
   badge: string;
 }> {
   const res = await openai.chat.completions.create({
-    model: 'gpt-4.1-mini',
+    model: MODELS.copy,
     response_format: { type: 'json_object' },
+    ...chatTuning(MODELS.copy, { maxOutputTokens: 200 }),
     messages: [{
       role: 'user',
       content: `당신은 한국 인스타그램 카드뉴스 카피라이터입니다.
@@ -90,7 +92,6 @@ JSON으로만 응답:
   "badge": "우측 상단 뱃지 텍스트 (최대 6자, 예: 신메뉴, 이벤트, 추천)"
 }`,
     }],
-    max_tokens: 200,
   });
   try {
     return JSON.parse(res.choices[0].message.content ?? '{}');

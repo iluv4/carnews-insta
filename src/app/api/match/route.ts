@@ -5,6 +5,7 @@ import {
   resolveTemplateId,
   type MatchableTemplate,
 } from '@/lib/prompts';
+import { MODELS, chatTuning } from '@/lib/models';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'dummy_key',
@@ -26,10 +27,12 @@ export async function POST(req: Request) {
     }
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: MODELS.classify,
       messages: buildTemplateMatchMessages(theme, templates) as OpenAI.Chat.ChatCompletionMessageParam[],
-      temperature: 0.1, // Low temperature for deterministic output
-      max_tokens: 32, // A bare id is all we want — cap runaway prose.
+      // Bare-id output; low reasoning effort keeps this classification cheap and
+      // fast. The visible answer is tiny but reasoning models still need budget
+      // headroom (a 32-token cap would be eaten by reasoning → empty reply).
+      ...chatTuning(MODELS.classify, { maxOutputTokens: 32, temperature: 0.1, reasoningEffort: 'low' }),
     });
 
     // Guardrail: never trust the raw reply. Validate against the real id set so

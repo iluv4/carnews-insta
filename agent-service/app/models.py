@@ -25,6 +25,24 @@ def _client() -> Optional["OpenAI"]:
     return OpenAI(api_key=s.openai_api_key)
 
 
+def _is_reasoning(model: str) -> bool:
+    """GPT-5 family / o-series are reasoning models with different param rules."""
+    m = model.lower()
+    return m.startswith("gpt-5") or (len(m) > 1 and m[0] == "o" and m[1].isdigit())
+
+
+def _token_params(model: str, max_tokens: int) -> dict[str, int]:
+    """Emit the model-appropriate output-budget param.
+
+    Reasoning models reject ``max_tokens`` (must use ``max_completion_tokens``)
+    and spend part of that budget on hidden reasoning tokens, so they get
+    headroom on top of the visible output we actually want.
+    """
+    if _is_reasoning(model):
+        return {"max_completion_tokens": max(max_tokens + 2048, 4096)}
+    return {"max_tokens": max_tokens}
+
+
 def chat_json(system: str, user: str, *, max_tokens: int = 1200) -> dict[str, Any]:
     """Reasoning/text call that returns parsed JSON. Returns {} on failure."""
     client = _client()
@@ -35,11 +53,11 @@ def chat_json(system: str, user: str, *, max_tokens: int = 1200) -> dict[str, An
         res = client.chat.completions.create(
             model=s.text_model,
             response_format={"type": "json_object"},
-            max_tokens=max_tokens,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
+            **_token_params(s.text_model, max_tokens),
         )
         return json.loads(res.choices[0].message.content or "{}")
     except Exception:
@@ -57,7 +75,6 @@ def vision_json(system: str, prompt: str, image_b64: str, *, max_tokens: int = 8
         res = client.chat.completions.create(
             model=s.vision_model,
             response_format={"type": "json_object"},
-            max_tokens=max_tokens,
             messages=[
                 {"role": "system", "content": system},
                 {
@@ -68,6 +85,7 @@ def vision_json(system: str, prompt: str, image_b64: str, *, max_tokens: int = 8
                     ],
                 },
             ],
+            **_token_params(s.vision_model, max_tokens),
         )
         return json.loads(res.choices[0].message.content or "{}")
     except Exception:
@@ -85,6 +103,7 @@ def generate_card_image(prompt: str) -> Optional[str]:
             model=s.image_model,
             prompt=prompt,
             size=s.image_size,
+            quality=s.image_quality,
             n=1,
         )
         data = res.data[0]

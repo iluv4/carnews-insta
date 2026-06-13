@@ -19,7 +19,7 @@
 - **검색 기반 생성(RAG)**: 저장된 45개 실제 인스타 템플릿을 임베딩해 주제와 유사한
   디자인을 검색하고, 그 결과를 카피/디자인 생성의 few-shot 근거로 사용합니다.
   (기존 `/api/match`의 "이름만 보고 추측"을 실제 벡터 검색으로 대체)
-- **자기수정 루프**: `art_director`(GPT-5.2 비전) 비평 → `reviser` → 재생성으로,
+- **자기수정 루프**: `art_director`(GPT-5.5 비전) 비평 → `reviser` → 재생성으로,
   품질 점수가 임계값을 넘을 때까지 카드를 다시 만듭니다. (단방향 1패스 → 피드백 루프)
 - **풀카드 이미지 생성**: `gpt-image-2`로 한국어 텍스트까지 박힌 카드를 한 번에 생성.
 
@@ -40,7 +40,7 @@
 
 - **[Fixed] Prisma 7 & Neon Postgres**: Prisma 7의 새로운 설정 규격에 맞춰 `prisma.config.ts`를 최적화하고, Neon DB와의 연동 안정성 확보.
 - **[Fixed] Base64 Image Analysis**: 서버에서 Base64 이미지 문자열을 URL로 오인하여 `fetch` 하려던 치명적 버그 해결.
-- **[Fixed] GPT-4o Vision Integration**: 이전의 잘못된 모델명(`gpt-5.5`)을 최신 비전 엔진인 `gpt-4o`로 교정하여 분석 정확도 향상.
+- **[Fixed] 모델 레지스트리 통합 & 최신 플래그십 적용**: API 라우트마다 흩어져 하드코딩되던 모델명(`gpt-4.1-mini`/`gpt-4o-mini`)을 `src/lib/models.ts` 한 곳으로 통합하고, 기본값을 최신 멀티모달 플래그십 `gpt-5.5`로 상향. reasoning 모델 파라미터 차이(`max_completion_tokens`·`temperature` 미지원)를 호환 shim으로 흡수하여 비전 분석·카피 품질을 끌어올림. (env로 태스크별 재정의 가능)
 - **[Fixed] Dynamic UI Update**: 템플릿 선택 시 "적용된 스타일" 배지가 실시간으로 업데이트되지 않던 리액티브 이슈 해결.
 
 ---
@@ -67,11 +67,13 @@ graph. See [`docs/AGENT_ARCHITECTURE.md`](docs/AGENT_ARCHITECTURE.md).
 - **Web**: `Next.js 16 (App Router)`, `React 19`, `Fabric.js` canvas renderer
 - **Agent service**: `FastAPI`, `LangGraph` (stateful graph with a critique→revision loop)
 - **Database**: `Prisma 7`, `PostgreSQL (Neon)` + `pgvector` for RAG retrieval
-- **AI Models (2026-06)**: `GPT-5.5` (reasoning/copy), `GPT-5.2` (vision critic),
-  `gpt-image-2` (full-card image generation), `text-embedding-3-large` (RAG)
+- **AI Models (2026-06)**: `GPT-5.5` (reasoning/copy/vision — multimodal),
+  `gpt-image-2` (full-card image generation, quality=high), `text-embedding-3-large` (RAG)
 
-> Models are env-overridable (`AGENT_TEXT_MODEL`, `AGENT_VISION_MODEL`,
-> `AGENT_IMAGE_MODEL`) — nothing is hard-pinned to a snapshot.
+> Models are env-overridable on both sides — Next.js routes via
+> `OPENAI_VISION_MODEL` / `OPENAI_COPY_MODEL` / `OPENAI_CLASSIFY_MODEL`
+> (`src/lib/models.ts`), and the agent service via `AGENT_TEXT_MODEL` /
+> `AGENT_VISION_MODEL` / `AGENT_IMAGE_MODEL`. Nothing is hard-pinned to a snapshot.
 
 ### 🔍 AI Pipelines (LLM Engineering)
 - **`/api/analyze`** — GPT-4o **Vision** 기반 레퍼런스 → 구조화 레이아웃 템플릿(JSON) 추출.

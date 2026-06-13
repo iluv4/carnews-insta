@@ -28,7 +28,7 @@ planner → retriever → copywriter → designer → image_gen → art_director
 | `copywriter` | GPT-5.5 | slide copy, grounded in retrieved exemplars |
 | `designer` | GPT-5.5 | art-direction prompt for the image model |
 | `image_gen` | **gpt-image-2** | full-card render (text baked in — by design) |
-| `art_director` | GPT-5.2 vision | scores the render against a rubric |
+| `art_director` | GPT-5.5 vision | scores the render against a rubric |
 | `reviser` | — | turns critic fixes into next-pass instructions, loops back |
 
 The `art_director → reviser → designer` cycle is the point: a one-shot generator
