@@ -19,12 +19,109 @@ type DonePayload = {
   provider?: string;
 };
 
+type CoverCopy = {
+  title?: string;
+  subtitle?: string;
+  footer?: string;
+  brand?: string;
+};
+
+// Renders the cover copy as a crisp typographic overlay on top of the
+// (text-free) background image. This is the whole point of the redesign:
+// diffusion models garble baked-in Korean, so the text is composited in the
+// browser where it stays pixel-sharp and fully controllable.
+function CardPreview({
+  imageB64,
+  cover,
+  brand,
+}: {
+  imageB64: string | null;
+  cover: CoverCopy;
+  brand?: string;
+}) {
+  const title = cover.title || '제목 미리보기';
+  const subtitle = cover.subtitle || '';
+  const footer = cover.footer || '';
+  const brandText = brand || cover.brand || '';
+  const bg = imageB64
+    ? `center/cover no-repeat url("data:image/png;base64,${imageB64}")`
+    : 'linear-gradient(135deg,#1f2937,#0f172a)';
+
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        position: 'relative',
+        width: 360,
+        aspectRatio: '2 / 3',
+        borderRadius: 12,
+        overflow: 'hidden',
+        border: '1px solid #eee',
+        background: bg,
+        fontFamily: "'Pretendard','Noto Sans KR',system-ui,sans-serif",
+      }}
+    >
+      {brandText && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 18,
+            right: 18,
+            padding: '6px 12px',
+            borderRadius: 999,
+            background: 'rgba(0,0,0,0.45)',
+            color: '#fff',
+            fontSize: 13,
+            fontWeight: 700,
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          {brandText}
+        </div>
+      )}
+      {/* bottom scrim for legible text over any photo */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background:
+            'linear-gradient(to bottom, rgba(0,0,0,0) 45%, rgba(0,0,0,0.35) 70%, rgba(0,0,0,0.8) 100%)',
+        }}
+      />
+      <div style={{ position: 'absolute', left: 22, right: 22, bottom: 26 }}>
+        {subtitle && (
+          <div style={{ color: 'rgba(255,255,255,0.88)', fontSize: 15, marginBottom: 8, letterSpacing: '-0.01em' }}>
+            {subtitle}
+          </div>
+        )}
+        <div
+          style={{
+            color: '#fff',
+            fontSize: 30,
+            fontWeight: 800,
+            lineHeight: 1.18,
+            letterSpacing: '-0.02em',
+            wordBreak: 'keep-all',
+            textShadow: '0 2px 10px rgba(0,0,0,0.45)',
+          }}
+        >
+          {title}
+        </div>
+        <div style={{ width: 48, height: 4, borderRadius: 2, background: '#ff6b35', marginTop: 14 }} />
+        {footer && (
+          <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 14 }}>{footer}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const NODE_LABEL: Record<string, string> = {
   planner: '🧭 Planner — 슬라이드 구성',
   retriever: '🔎 Retriever — RAG 검색',
   copywriter: '✍️ Copywriter — 카피 생성',
   designer: '🎨 Designer — 이미지 프롬프트',
-  image_gen: '🖼️ Image — gpt-image-2 생성',
+  image_gen: '🖼️ Image — 배경 생성(텍스트 제외)',
   art_director: '🧐 Art Director — 비평/채점',
   reviser: '🔁 Reviser — 수정 지시(루프)',
 };
@@ -115,9 +212,16 @@ export default function AgentDemoPage() {
 
   return (
     <main style={{ maxWidth: 820, margin: '0 auto', padding: 24, fontFamily: 'system-ui' }}>
+      {/* React 19 hoists this into <head>; gives the overlay a proper KR font. */}
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;800;900&display=swap"
+      />
       <h1 style={{ fontSize: 24, fontWeight: 800 }}>🤖 Agentic Card-News (RAG + LangGraph)</h1>
       <p style={{ color: '#666', marginTop: 4 }}>
-        Planner → Retriever(RAG) → Copywriter → Designer → gpt-image-2 → Art Director → (loop)
+        Planner → Retriever(RAG) → Copywriter → Designer → 배경 이미지 → Art Director → (loop)
+        <br />
+        <span style={{ fontSize: 12 }}>※ 한국어 텍스트는 이미지에 굽지 않고 브라우저에서 또렷한 타이포로 오버레이</span>
       </p>
 
       {/* 페르소나(역할) 선택 — 누르면 다듬기 단계에서 해당 역할이 자동 부여된다. */}
@@ -258,15 +362,17 @@ export default function AgentDemoPage() {
             </details>
           )}
 
-          {done.card_image_b64 ? (
-            <img
-              alt="generated card"
-              src={`data:image/png;base64,${done.card_image_b64}`}
-              style={{ marginTop: 12, maxWidth: 360, borderRadius: 12, border: '1px solid #eee' }}
-            />
-          ) : (
-            <p style={{ color: '#999', marginTop: 12 }}>
-              (이미지 없음 — OPENAI_API_KEY 미설정 시 카피/그래프만 동작)
+          {/* Text is rendered as a crisp CSS overlay — never baked into the
+              image — so Korean glyphs stay sharp and never garble. The diffusion
+              output (if any) is used only as a text-free background. */}
+          <CardPreview
+            imageB64={done.card_image_b64 ?? null}
+            cover={(done.copy?.slides?.[0] ?? {}) as CoverCopy}
+            brand={(done.copy?.slides?.[0] as CoverCopy | undefined)?.brand}
+          />
+          {!done.card_image_b64 && (
+            <p style={{ color: '#999', marginTop: 8, fontSize: 12 }}>
+              (배경 이미지 없음 — OPENAI_API_KEY 미설정 시 카피 오버레이만 미리보기)
             </p>
           )}
 

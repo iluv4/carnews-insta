@@ -27,6 +27,10 @@ class Settings(BaseModel):
     # gpt-image-2 quality: low|medium|high|auto. "high" runs the deepest
     # inference path → sharpest detail and best Korean text rendering.
     image_quality: str = os.getenv("AGENT_IMAGE_QUALITY", "high")
+    # Reasoning effort for GPT-5 family text/vision calls: none|low|medium|high|
+    # xhigh. Quality-first default "high" — more reasoning → better copy and a
+    # sharper art-direction critique, at higher token cost.
+    reasoning_effort: str = os.getenv("AGENT_REASONING_EFFORT", "high")
     embed_model: str = os.getenv("AGENT_EMBED_MODEL", "text-embedding-3-large")
 
     # --- RAG ---

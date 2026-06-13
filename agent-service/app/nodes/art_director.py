@@ -10,13 +10,20 @@ from ..config import get_settings
 from ..models import vision_json
 from ..schemas import AgentState
 
-SYSTEM = "You are a meticulous art director reviewing a Korean card-news image. Output ONLY JSON."
+SYSTEM = (
+    "You are a meticulous art director reviewing the BACKGROUND image of a "
+    "Korean card-news card. The Korean text is added later as a crisp overlay, "
+    "so the image itself must contain NO text. Output ONLY JSON."
+)
 
 RUBRIC = (
-    "다음 기준으로 0~10점 채점하라: 가독성/대비, 시각적 위계, 한국어 타이포 품질, "
-    "브랜드 일관성, 오타·깨진 글자·잡티 유무. 문제와 구체적 수정안을 나열하라.\n"
-    '반드시 이 JSON: {"score":0-10,"readability":"...","hierarchy":"...",'
-    '"typography":"...","brand_consistency":"...","issues":["..."],"fixes":["..."]}'
+    "다음 기준으로 0~10점 채점하라: 구도/시각적 위계, 색·무드의 매력, 하단 "
+    "텍스트 오버레이용 여백 확보 여부, 잡티·아티팩트 유무. \n"
+    "중요: 이미지 안에 글자/문자/워터마크가 보이면 큰 감점하고 fixes에 'remove all "
+    "text/letters from the image' 를 넣어라 (텍스트는 오버레이로 들어가므로 배경엔 "
+    "절대 없어야 함).\n"
+    '반드시 이 JSON: {"score":0-10,"composition":"...","palette":"...",'
+    '"overlay_space":"...","has_text":true|false,"issues":["..."],"fixes":["..."]}'
 )
 
 

@@ -27,8 +27,8 @@ planner → retriever → copywriter → designer → image_gen → art_director
 | `retriever` | embeddings | **RAG**: top-k similar real templates (pgvector or in-process) |
 | `copywriter` | GPT-5.5 | slide copy, grounded in retrieved exemplars |
 | `designer` | GPT-5.5 | art-direction prompt for the image model |
-| `image_gen` | **gpt-image-2** | full-card render (text baked in — by design) |
-| `art_director` | GPT-5.5 vision | scores the render against a rubric |
+| `image_gen` | **gpt-image-2** | text-free background render (Korean text is overlaid by the client, never baked — diffusion garbles Korean glyphs) |
+| `art_director` | GPT-5.5 vision | scores the background against a rubric (penalises any stray text) |
 | `reviser` | — | turns critic fixes into next-pass instructions, loops back |
 
 The `art_director → reviser → designer` cycle is the point: a one-shot generator

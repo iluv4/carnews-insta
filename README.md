@@ -21,7 +21,7 @@
   (기존 `/api/match`의 "이름만 보고 추측"을 실제 벡터 검색으로 대체)
 - **자기수정 루프**: `art_director`(GPT-5.5 비전) 비평 → `reviser` → 재생성으로,
   품질 점수가 임계값을 넘을 때까지 카드를 다시 만듭니다. (단방향 1패스 → 피드백 루프)
-- **풀카드 이미지 생성**: `gpt-image-2`로 한국어 텍스트까지 박힌 카드를 한 번에 생성.
+- **배경 생성 + 타이포 오버레이**: `gpt-image-2`로 **글자 없는 배경**을 생성하고, 한국어 카피는 브라우저에서 또렷한 CSS 타이포로 얹습니다. (확산 모델이 한글을 구우면 헛글자가 생기는 문제를 구조적으로 제거)
 
 ### 2. "Wowed" UX: Instant Quick Test
 - **One-Click Magic**: 업종별 추천 버튼 클릭 시 URL 입력부터 이미지 추출까지 **즉시 실행**.
@@ -67,7 +67,8 @@ graph. See [`docs/AGENT_ARCHITECTURE.md`](docs/AGENT_ARCHITECTURE.md).
 - **Web**: `Next.js 16 (App Router)`, `React 19`, `Fabric.js` canvas renderer
 - **Agent service**: `FastAPI`, `LangGraph` (stateful graph with a critique→revision loop)
 - **Database**: `Prisma 7`, `PostgreSQL (Neon)` + `pgvector` for RAG retrieval
-- **AI Models (2026-06)**: `GPT-5.5` (reasoning/copy/vision — multimodal),
+- **AI Models (2026-06)**: `GPT-5.5` (reasoning/copy/vision — multimodal,
+  `reasoning_effort=high` by default for quality-first output),
   `gpt-image-2` (full-card image generation, quality=high), `text-embedding-3-large` (RAG)
 
 > Models are env-overridable on both sides — Next.js routes via

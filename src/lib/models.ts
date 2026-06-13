@@ -37,12 +37,20 @@ export const MODELS = {
   classify: process.env.OPENAI_CLASSIFY_MODEL ?? 'gpt-5.5',
 } as const;
 
+type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+// Quality-first default: spend more reasoning (→ more tokens → more cost) on the
+// calls that actually drive output quality. gpt-5.5 supports none|low|medium|
+// high|xhigh; bump to 'xhigh' (or point a model env at 'gpt-5.5-pro') to go
+// further. Non-bottleneck calls (classification, one-shot subject briefs) pass
+// 'low' explicitly so we don't pay for reasoning that doesn't move quality.
+const DEFAULT_REASONING_EFFORT = (process.env.OPENAI_REASONING_EFFORT ??
+  'high') as ReasoningEffort;
+
 /** GPT-5 family and o-series are reasoning models with the param constraints above. */
 export function isReasoningModel(model: string): boolean {
   return /^(gpt-5|o\d)/i.test(model);
 }
-
-type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 
 export type ChatTuning = {
   max_tokens?: number;
@@ -68,13 +76,12 @@ export function chatTuning(
   }: { maxOutputTokens: number; temperature?: number; reasoningEffort?: ReasoningEffort }
 ): ChatTuning {
   if (isReasoningModel(model)) {
-    const out: ChatTuning = {
+    return {
       // Leave room for hidden reasoning tokens on top of the visible output so
       // the JSON/text we actually need is never starved.
       max_completion_tokens: Math.max(maxOutputTokens + 2048, 4096),
+      reasoning_effort: reasoningEffort ?? DEFAULT_REASONING_EFFORT,
     };
-    if (reasoningEffort) out.reasoning_effort = reasoningEffort;
-    return out;
   }
   const out: ChatTuning = { max_tokens: maxOutputTokens };
   if (temperature !== undefined) out.temperature = temperature;
