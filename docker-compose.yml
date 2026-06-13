@@ -1,0 +1,27 @@
+# Runs the two-service architecture locally: the Next.js web app and the
+# Python FastAPI + LangGraph agent service, sharing one Postgres.
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AGENT_SERVICE_URL=http://agent:8000
+    depends_on:
+      - agent
+
+  agent:
+    build:
+      context: ./agent-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      # templates are read from the repo's src/templates (mounted below)
+      - AGENT_TEMPLATES_DIR=/srv/src/templates
+    volumes:
+      - ./src/templates:/srv/src/templates:ro

@@ -1,0 +1,7 @@
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+pydantic>=2.7,<3.0
+langgraph>=0.2,<1.0
+openai>=1.50
+# Optional: enable pgvector-backed RAG persistence instead of in-process index.
+psycopg[binary]>=3.2
