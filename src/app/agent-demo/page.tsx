@@ -168,7 +168,17 @@ export default function AgentDemoPage() {
         }
       }
     } catch (e) {
-      setError((e as Error).message);
+      const msg = (e as Error).message || String(e);
+      // Same-origin fetch rejections ("Load failed" / "Failed to fetch") mean the
+      // request never completed — almost always the request was dropped because
+      // the agent pipeline ran past the route timeout (image gen + revision loop
+      // are slow), or the agent service is unreachable.
+      const dropped = /load failed|failed to fetch|networkerror/i.test(msg);
+      setError(
+        dropped
+          ? `요청이 끊겼습니다 (${msg}). 백엔드가 응답을 끝내지 못했을 가능성 — agent-service가 떠 있는지, 이미지 생성이 타임아웃되진 않았는지 확인하세요.`
+          : msg,
+      );
     } finally {
       setRunning(false);
     }
