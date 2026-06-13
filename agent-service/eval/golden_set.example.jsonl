@@ -1,0 +1,21 @@
+# Golden set template — copy to golden_set.jsonl and fill with REAL data.
+# One JSON object per line. Lines starting with '#' and blank lines are ignored.
+#
+# Fields:
+#   id          : short label for the card (string)
+#   image_path  : path to the rendered card PNG, relative to THIS file
+#                 (or use "image_b64" with a raw/data-URL base64 string instead)
+#   human_score : your 0~10 quality score (this is the ground truth)
+#   note        : (optional) why you scored it that way
+#
+# How to build a real one (~10-15 cards is enough to be directional):
+#   1. Generate cards via the agent (POST /generate) and save each background PNG.
+#   2. Score each yourself 0~10 using the SAME rubric the critic uses
+#      (hierarchy / palette / overlay space / artifacts / no baked-in text).
+#   3. Run:  python -m eval.critic_eval --golden eval/golden_set.jsonl
+#
+# The rows below have no image_path, so the critic passes them through at the
+# threshold — they exist only to prove the harness runs end-to-end offline.
+{"id": "demo_high", "human_score": 9.0, "note": "placeholder (no image)"}
+{"id": "demo_mid", "human_score": 6.5, "note": "placeholder (no image)"}
+{"id": "demo_low", "human_score": 3.0, "note": "placeholder (no image)"}
