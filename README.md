@@ -67,7 +67,8 @@ graph. See [`docs/AGENT_ARCHITECTURE.md`](docs/AGENT_ARCHITECTURE.md).
 - **Web**: `Next.js 16 (App Router)`, `React 19`, `Fabric.js` canvas renderer
 - **Agent service**: `FastAPI`, `LangGraph` (stateful graph with a critique→revision loop)
 - **Database**: `Prisma 7`, `PostgreSQL (Neon)` + `pgvector` for RAG retrieval
-- **AI Models (2026-06)**: `GPT-5.5` (reasoning/copy/vision — multimodal),
+- **AI Models (2026-06)**: `GPT-5.5` (reasoning/copy/vision — multimodal,
+  `reasoning_effort=high` by default for quality-first output),
   `gpt-image-2` (full-card image generation, quality=high), `text-embedding-3-large` (RAG)
 
 > Models are env-overridable on both sides — Next.js routes via

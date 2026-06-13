@@ -31,15 +31,19 @@ def _is_reasoning(model: str) -> bool:
     return m.startswith("gpt-5") or (len(m) > 1 and m[0] == "o" and m[1].isdigit())
 
 
-def _token_params(model: str, max_tokens: int) -> dict[str, int]:
-    """Emit the model-appropriate output-budget param.
+def _reasoning_params(model: str, max_tokens: int) -> dict[str, Any]:
+    """Emit the model-appropriate output-budget + reasoning params.
 
     Reasoning models reject ``max_tokens`` (must use ``max_completion_tokens``)
     and spend part of that budget on hidden reasoning tokens, so they get
-    headroom on top of the visible output we actually want.
+    headroom on top of the visible output we actually want, plus the configured
+    reasoning effort (quality-first default "high").
     """
     if _is_reasoning(model):
-        return {"max_completion_tokens": max(max_tokens + 2048, 4096)}
+        return {
+            "max_completion_tokens": max(max_tokens + 2048, 4096),
+            "reasoning_effort": get_settings().reasoning_effort,
+        }
     return {"max_tokens": max_tokens}
 
 
@@ -57,7 +61,7 @@ def chat_json(system: str, user: str, *, max_tokens: int = 1200) -> dict[str, An
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            **_token_params(s.text_model, max_tokens),
+            **_reasoning_params(s.text_model, max_tokens),
         )
         return json.loads(res.choices[0].message.content or "{}")
     except Exception:
@@ -85,7 +89,7 @@ def vision_json(system: str, prompt: str, image_b64: str, *, max_tokens: int = 8
                     ],
                 },
             ],
-            **_token_params(s.vision_model, max_tokens),
+            **_reasoning_params(s.vision_model, max_tokens),
         )
         return json.loads(res.choices[0].message.content or "{}")
     except Exception:
