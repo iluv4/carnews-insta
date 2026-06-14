@@ -142,7 +142,44 @@ efficiency over Canva and direct use of image models.
 - [ ] **(보류)** RAG 배포(Railway pgvector) 안정화 — 개발 난이도 높아 후순위
 - [ ] 관련 연구 정독 + bib 정리
 
-## 6. 정직한 리스크
+## 6. 로컬 실행 / 실험 환경 (재현 절차 박제)
+
+연구·실험은 배포(Railway/pgvector)가 아니라 **로컬 in-process 모드**로 돌린다.
+`store.py`는 (1) pgvector → (2) in-process numpy 인덱스 → (3) lexical 폴백 순으로
+동작하므로, 키 하나만 있으면 배포 없이 RAG가 완전히 재현된다.
+
+```bash
+# 1) agent-service 의존성
+cd agent-service
+pip install -r requirements.txt
+
+# 2) 임베딩 활성화 (없으면 자동 lexical 폴백)
+export OPENAI_API_KEY=sk-...
+# (선택) 모델/탑K 재정의
+export AGENT_EMBED_MODEL=text-embedding-3-large
+export AGENT_RAG_TOP_K=4
+# DATABASE_URL 미설정 → 자동으로 in-process numpy 인덱스 사용 (배포 불필요)
+
+# 3) RAG 헬스체크 — 임베딩 경로가 실제로 도는지 검증
+python scripts/check_embed.py
+```
+
+기대 출력(정상): `templates loaded : 45`, `vectors built : 45/45`,
+`RESULT: EMBEDDINGS ACTIVE`. `LEXICAL FALLBACK`이 뜨면 배포 문제가 아니라
+`OPENAI_API_KEY` 미설정이다.
+
+| 변수 | 의미 | 실험 기본값 |
+| :--- | :--- | :--- |
+| `OPENAI_API_KEY` | 임베딩/생성 키 | 필수(없으면 lexical) |
+| `DATABASE_URL` | 설정 시 pgvector 사용 | **비움**(로컬 numpy) |
+| `AGENT_EMBED_MODEL` | 임베딩 모델 | text-embedding-3-large |
+| `AGENT_RAG_TOP_K` | 검색 개수 | 4 |
+| `AGENT_TEMPLATES_DIR` | 템플릿 경로 | src/templates (45개) |
+
+> 재현 원칙: 실험은 `DATABASE_URL`을 비운 로컬 모드 + 고정 seed로 N회 반복.
+> 통제지표(재현성 분산) 측정에 동일 환경이 필수.
+
+## 7. 정직한 리스크
 
 - CVPR(비전 알고리즘)에는 부적합 — **HCI(시스템+사용자스터디)** 가 맞는 자리.
 - "의도 충실도"의 조작적 정의가 약하면 리뷰 취약 → 구조화 속성 + 사람 평가로 보강 필수.
