@@ -38,9 +38,17 @@ try:
         from langgraph.types import Send
     except Exception:  # pragma: no cover
         from langgraph.constants import Send
+
+    try:  # InMemoryCache + allowed_objects landed in langgraph >=0.2.x
+        from langgraph.cache.memory import InMemoryCache
+        _cache = InMemoryCache(allowed_objects="messages")
+    except Exception:  # pragma: no cover - older builds without cache API
+        _cache = None
+
     _HAS_LANGGRAPH = True
 except Exception:  # pragma: no cover - allows import without the dep installed
     _HAS_LANGGRAPH = False
+    _cache = None
 
 
 def _route_after_critic(state: AgentState) -> Literal["reviser", "done"]:
@@ -153,7 +161,7 @@ def build_graph():
     g.add_conditional_edges("copywriter", _dispatch, ["render_slide"])
     g.add_edge("render_slide", "collect")
     g.add_edge("collect", END)
-    return g.compile()
+    return g.compile(cache=_cache)
 
 
 def run_linear(state: AgentState):
