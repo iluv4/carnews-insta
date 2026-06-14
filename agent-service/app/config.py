@@ -32,6 +32,24 @@ class Settings(BaseModel):
     # sharper art-direction critique, at higher token cost.
     reasoning_effort: str = os.getenv("AGENT_REASONING_EFFORT", "high")
     embed_model: str = os.getenv("AGENT_EMBED_MODEL", "text-embedding-3-large")
+    # Optional OpenAI-compatible base URL. Routes every call through a gateway or
+    # an OpenAI-compatible provider without code changes. Empty = OpenAI default.
+    openai_base_url: str = os.getenv("OPENAI_BASE_URL", "")
+
+    # --- Reference analysis (read Korean text + describe layout) ---
+    # This is a *perception* task (OCR + layout), not aesthetic taste, so an open
+    # VLM is fully competitive. These default to the main vision model/endpoint
+    # but can be pointed independently at Qwen2.5-VL through an OpenAI-compatible
+    # provider (Together / OpenRouter / DashScope) — no GPU on your side, Railway
+    # stays CPU. e.g. AGENT_ANALYZE_MODEL=Qwen/Qwen2.5-VL-72B-Instruct
+    #      AGENT_ANALYZE_BASE_URL=https://api.together.xyz/v1  AGENT_ANALYZE_API_KEY=...
+    analyze_model: str = os.getenv("AGENT_ANALYZE_MODEL", "") or os.getenv(
+        "AGENT_VISION_MODEL", "gpt-5.5"
+    )
+    analyze_base_url: str = os.getenv("AGENT_ANALYZE_BASE_URL", "") or os.getenv(
+        "OPENAI_BASE_URL", ""
+    )
+    analyze_api_key: str = os.getenv("AGENT_ANALYZE_API_KEY", "")
 
     # --- RAG ---
     database_url: str = os.getenv("DATABASE_URL", "") or os.getenv(
@@ -53,6 +71,12 @@ class Settings(BaseModel):
     def has_openai(self) -> bool:
         k = self.openai_api_key
         return bool(k) and k not in {"dummy_key", "your_openai_api_key_here"}
+
+    @property
+    def analyze_key(self) -> str:
+        """Key for the reference-analysis endpoint, falling back to the main key
+        (so pointing only AGENT_ANALYZE_MODEL at an OpenAI model just works)."""
+        return self.analyze_api_key or self.openai_api_key
 
 
 @lru_cache

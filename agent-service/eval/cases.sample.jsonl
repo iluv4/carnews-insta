@@ -1,0 +1,8 @@
+# Sample eval manifest — one JSON object per line (lines starting with # are ignored).
+# `image` is resolved relative to THIS file. `expected` (good|ok|bad) is optional;
+# add your own human label to measure the critic's band accuracy.
+# Drop real card backgrounds into agent-service/eval/samples/ and list them here.
+{"image": "samples/clean_lower_third.png", "expected": "good", "note": "rich photo, clear empty lower third, no text"}
+{"image": "samples/busy_no_space.png", "expected": "bad", "note": "subject fills frame, nowhere to place the overlay"}
+{"image": "samples/baked_korean_text.png", "expected": "bad", "note": "image already has garbled Korean baked in — text gate should fire"}
+{"image": "samples/muted_ok.png", "expected": "ok", "note": "fine composition but flat palette"}

@@ -14,10 +14,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from .analyze import analyze_reference
 from .config import get_settings
 from .graph import build_graph, run_linear, _HAS_LANGGRAPH
 from .rag.store import get_store
-from .schemas import AgentState, GenerateRequest
+from .schemas import AgentState, AnalyzeRequest, GenerateRequest
 
 app = FastAPI(title="carnews-agent", version="1.0.0")
 app.add_middleware(
@@ -41,7 +42,12 @@ def healthz() -> JSONResponse:
             "ok": True,
             "langgraph": _HAS_LANGGRAPH,
             "openai": s.has_openai,
-            "models": {"text": s.text_model, "vision": s.vision_model, "image": s.image_model},
+            "models": {
+                "text": s.text_model,
+                "vision": s.vision_model,
+                "image": s.image_model,
+                "analyze": s.analyze_model,
+            },
         }
     )
 
@@ -129,6 +135,15 @@ def _slim(partial: dict) -> dict:
         if isinstance(out.get(key), list):
             out[key] = [_slim_card(c) for c in out[key]]
     return out
+
+
+@app.post("/analyze")
+def analyze(req: AnalyzeRequest) -> JSONResponse:
+    """Read the Korean text + describe the layout of one reference card image.
+
+    Perception task — runs on GPT-5.5 by default, or Qwen2.5-VL via AGENT_ANALYZE_*.
+    """
+    return JSONResponse(analyze_reference(req.image))
 
 
 @app.post("/generate")

@@ -16,6 +16,10 @@ class GenerateRequest(BaseModel):
     render_image: bool = True
 
 
+class AnalyzeRequest(BaseModel):
+    image: str = Field(..., description="Reference card image as base64 or a data URL.")
+
+
 class SlidePlan(BaseModel):
     role: str  # cover | review | menu | cta | info | closing
     intent: str
@@ -27,14 +31,21 @@ class RetrievedExample(BaseModel):
     summary: str
 
 
-class Critique(BaseModel):
+class AxisScore(BaseModel):
+    """One axis of the art-director rubric (0–10) with a one-line comment."""
     score: float
-    readability: str
-    hierarchy: str
-    typography: str
-    brand_consistency: str
-    issues: list[str] = []
-    fixes: list[str] = []
+    comment: str = ""
+
+
+class Critique(BaseModel):
+    """Art-director critique. ``score`` is the weighted aggregate of ``axes``
+    (composition, overlay_space, color_mood, cleanliness, text_free), computed
+    deterministically by ``app.nodes.art_director.aggregate``."""
+    score: float
+    axes: dict[str, AxisScore] = Field(default_factory=dict)
+    has_text: bool = False
+    issues: list[str] = Field(default_factory=list)
+    fixes: list[str] = Field(default_factory=list)
 
 
 class AgentState(TypedDict, total=False):
