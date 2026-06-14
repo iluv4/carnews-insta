@@ -14,14 +14,11 @@ services:
 
   agent:
     build:
-      context: ./agent-service
-      dockerfile: Dockerfile
+      # Root context so src/templates is baked into the image (same as Railway).
+      context: .
+      dockerfile: agent-service/Dockerfile
     ports:
       - "8000:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DATABASE_URL=${DATABASE_URL}
-      # templates are read from the repo's src/templates (mounted below)
-      - AGENT_TEMPLATES_DIR=/srv/src/templates
-    volumes:
-      - ./src/templates:/srv/src/templates:ro
