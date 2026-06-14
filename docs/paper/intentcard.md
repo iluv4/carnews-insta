@@ -37,46 +37,81 @@ card-news, retrieval-augmented generation, typography.
 
 ## 1. Introduction
 
-Visual "card-news" — multi-slide image posts that package information for social
-feeds — has become a primary marketing channel for small businesses in Korea and
-elsewhere. Producing it well, however, still presupposes design competence: choosing
-a layout, a palette, type, and imagery that together communicate a brand's intent.
+Visual *card-news* — short, multi-slide image posts that package information for
+social feeds — has become a primary marketing channel for small businesses, and its
+importance has grown as social platforms increasingly favor multi-image carousel
+content. A neighborhood insurance agent, a café owner, or a small marketing team now
+routinely needs a steady stream of on-brand cards. Producing them well, however,
+still presupposes design competence: one must choose a layout, a palette, typography,
+and imagery that *together* communicate a brand's intent. Non-experts who lack that
+competence either learn a tool like Canva, pay for outsourcing, or settle for results
+that miss what they had in mind.
 
-The recent wave of text-to-image models appears to remove this barrier. In practice
-it relocates it. A non-expert who can describe what they *mean* ("a warm, trustworthy
-card for a neighborhood insurance shop, navy and gold, aimed at people in their 50s")
-still cannot reliably get a model to (a) honor a specific brand color or typeface,
-(b) edit a single word afterward without regenerating the whole image, or (c) obtain
-the *same* result twice. These are not quality failures — modern models render Korean
-text and rich imagery well — they are **control** failures. For a commercial user,
-control is the product.
+The recent wave of text-to-image models appears to dissolve this barrier. In practice
+it *relocates* it. Contemporary generators produce visually compelling imagery and —
+contrary to a common assumption — render Korean text well. The difficulty a non-expert
+hits is no longer that the model cannot draw; it is that the user cannot reliably bend
+the model to their **intent**. Consider an agent who wants "a warm, trustworthy card
+for a neighborhood insurance shop, navy (#1A237E) and gold, aimed at customers in
+their fifties." With a raw image model they still cannot (a) *enforce* the exact brand
+navy and typeface, (b) edit a single word of the headline afterward without
+regenerating — and thereby altering — the whole image, or (c) obtain the *same* card
+twice. These are not quality failures. They are **control** failures. And for a
+commercial user, control — consistency, editability, reproducibility — is not a
+nicety; it is the product.
 
-We reframe the problem accordingly. The research question is:
+This reframing is the conceptual core of our work. The dominant research narrative
+treats card-news/poster generation as a *generation-quality* problem and competes on
+fidelity and aesthetics. We argue that for the non-expert population the binding
+constraint has shifted to *controllability of intent*. Two short formative
+interviews motivated and sharpened this view: an insurance field-sales agent (a
+non-expert who needs branded, trustworthy cards on short notice) and a card-news
+developer/outsourcer (an expert who could articulate the production workflow). The
+non-expert's recurring frustration was precisely the gap between a clear intent and an
+uncontrollable output; the expert's account let us distil the tacit rules — how layout,
+copy, and styling decisions are actually made — into an explicit production guide that
+we encode as machine-actionable guidance. From the same study we assembled a corpus of
+~40 real card-news references that anchors retrieval and layout analysis.
+
+We therefore pose the research question:
 
 > **RQ.** How can an AI system help design non-experts (e.g., small-business owners)
-> translate abstract design intent into card-news that is accurate to that intent,
-> brand-consistent, editable, and reproducible?
+> translate abstract design intent into card-news that is *accurate to that intent,
+> brand-consistent, editable, and reproducible*?
 
-We present **IntentCard**, a system built around the thesis that *we should not
-propose a stronger generator; we should let non-experts control a strong generator*.
-IntentCard contributes:
+We answer it with **IntentCard**, a system built on a deliberately modest thesis:
+*we do not propose a stronger generator; we let a non-expert control a strong one.*
+The design follows directly from the failure modes above. To capture intent, IntentCard
+elicits and structures it before any pixels are drawn. To ground generation in proven
+human design rather than the model's prior, it retrieves "design DNA" from the reference
+corpus. To make consistency, editability, and reproducibility *structural* rather than
+best-effort, it separates a generated text-free background from an editable typographic
+layer. And to close the loop on quality and intent, a vision-based critic revises until
+a threshold is met. Concretely, IntentCard contributes:
 
-1. **Intent-to-design elicitation.** A persona-grounded step that turns free-form
-   intent plus a business category into structured design attributes.
-2. **Design-DNA retrieval (RAG).** Embedding search over a corpus of real,
-   human-made templates that grounds copy and design in proven exemplars rather than
-   the model's prior — in the spirit of retrieval-augmented layout/generation work
-   such as RALF [Horita et al., CVPR 2024].
-3. **A control-guaranteeing render pipeline.** Generation of a *text-free* background
-   followed by an *editable typographic overlay*, which makes brand consistency,
-   editability, and reproducibility structural properties rather than best-effort
-   outcomes.
+1. **Intent-to-design elicitation.** A persona-grounded step that converts free-form
+   intent plus a business category into structured design attributes — the
+   machine-actionable specification consumed downstream.
+2. **Design-DNA retrieval (RAG) with multimodal layout analysis.** Embedding search
+   over a corpus of real, human-made templates, parsed into structural elements, that
+   grounds copy and design in proven exemplars — in the spirit of retrieval-augmented
+   layout generation such as RALF [Horita et al., CVPR 2024].
+3. **A control-guaranteeing render pipeline.** A *text-free* background plus an
+   *editable typographic overlay*, which turns brand consistency, editability, and
+   reproducibility into structural guarantees rather than hoped-for outcomes — the
+   central contribution.
 4. **A vision-based self-correction loop.** An "art director" critic (a multimodal
    LLM) scores candidates against intent and quality, driving revision until a
    threshold is met (LLM-as-aesthetic-judge).
 
-We evaluate with objective control-fidelity metrics and a user study, comparing to
-Canva (manual tooling) and to direct prompting of an image model.
+We evaluate IntentCard along two axes that mirror the reframing. First, *objective
+control-fidelity metrics* (brand-color ΔE, font match, reproducibility variance, edit
+cost, and CLIPScore intent-alignment) quantify control against a strong baseline that
+bakes text directly into the image. Second, a *within-subjects user study* with
+non-expert participants compares IntentCard to Canva (manual tooling) and to direct
+image-model prompting on completion time, intent fidelity, satisfaction, and workload.
+We deliberately compete on control, not raw aesthetic preference, to avoid an unfair
+quality contest against a far larger generator. **[DATA TBD]**
 
 ---
 
