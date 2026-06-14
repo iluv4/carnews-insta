@@ -17,7 +17,17 @@ export function needsImageProxy(url: string): boolean {
   if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('/')) {
     return false;
   }
-  return PROXY_HOST_PATTERN.test(url);
+  // Match on the *host* only. Testing the whole URL would proxy any unrelated
+  // address that merely mentions a CDN domain in its path or query string
+  // (e.g. `https://example.com/redirect?to=cdninstagram.com`), which is both
+  // wrong and a needless SSRF surface for `/api/proxy`.
+  let host: string;
+  try {
+    host = new URL(url, 'https://placeholder.invalid').hostname;
+  } catch {
+    return false;
+  }
+  return PROXY_HOST_PATTERN.test(host);
 }
 
 /** Returns a same-origin proxy URL for CDN images, or the original URL otherwise. */
