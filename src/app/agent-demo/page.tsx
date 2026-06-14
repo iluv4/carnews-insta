@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PERSONAS } from '@/lib/prompts';
 
 // Self-contained demo of the RAG + multi-agent pipeline. Streams Server-Sent
@@ -127,6 +127,87 @@ function CardPreview({
   );
 }
 
+type AgentHealth = {
+  ok: boolean;
+  embedding: 'active' | 'lexical-fallback' | 'unknown';
+  openai?: boolean | null;
+  templates_indexed?: number | null;
+  embedded?: number | null;
+  agent_url?: string;
+  error?: string;
+};
+
+// Live "is embedding actually on?" indicator — polls /api/agent-health (which
+// proxies the agent-service /rag/info) so the deployment's real state is visible
+// at a glance instead of having to curl the Python service directly.
+function EmbeddingStatus() {
+  const [health, setHealth] = useState<AgentHealth | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/agent-health', { cache: 'no-store' });
+        const data = (await res.json()) as AgentHealth;
+        if (alive) setHealth(data);
+      } catch {
+        if (alive) setHealth({ ok: false, embedding: 'unknown', error: 'fetch failed' });
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const tone =
+    loading || !health
+      ? { dot: '#999', bg: '#f3f4f6', fg: '#555', label: '임베딩 상태 확인 중…' }
+      : health.embedding === 'active'
+        ? {
+            dot: '#16a34a',
+            bg: '#ecfdf5',
+            fg: '#065f46',
+            label: `임베딩 ON · ${health.embedded ?? 0}/${health.templates_indexed ?? 0} 벡터`,
+          }
+        : health.embedding === 'lexical-fallback'
+          ? {
+              dot: '#f59e0b',
+              bg: '#fffbeb',
+              fg: '#92400e',
+              label: `임베딩 OFF · 렉시컬 폴백 (${health.templates_indexed ?? 0} 템플릿)`,
+            }
+          : { dot: '#dc2626', bg: '#fef2f2', fg: '#991b1b', label: 'agent-service 연결 안 됨' };
+
+  return (
+    <span
+      title={
+        health
+          ? `embedding=${health.embedding} · openai=${String(health.openai)} · ${health.agent_url ?? ''}${health.error ? ` · ${health.error}` : ''}`
+          : undefined
+      }
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 12px',
+        borderRadius: 999,
+        background: tone.bg,
+        color: tone.fg,
+        fontSize: 13,
+        fontWeight: 600,
+      }}
+    >
+      <span
+        style={{ width: 9, height: 9, borderRadius: '50%', background: tone.dot, flexShrink: 0 }}
+      />
+      {tone.label}
+    </span>
+  );
+}
+
 const NODE_LABEL: Record<string, string> = {
   planner: '🧭 Planner — 슬라이드 구성',
   retriever: '🔎 Retriever — RAG 검색',
@@ -234,6 +315,10 @@ export default function AgentDemoPage() {
         <br />
         <span style={{ fontSize: 12 }}>※ 한국어 텍스트는 이미지에 굽지 않고 브라우저에서 또렷한 타이포로 오버레이</span>
       </p>
+
+      <div style={{ marginTop: 12 }}>
+        <EmbeddingStatus />
+      </div>
 
       {/* 페르소나(역할) 선택 — 누르면 다듬기 단계에서 해당 역할이 자동 부여된다. */}
       <div style={{ marginTop: 16 }}>
