@@ -20,7 +20,7 @@ except Exception:  # pragma: no cover
 
 def _client(base_url: Optional[str] = None, api_key: Optional[str] = None) -> Optional["OpenAI"]:
     """Build an OpenAI(-compatible) client. ``base_url`` lets calls target an
-    OpenAI-compatible provider (e.g. Together / OpenRouter for Qwen2.5-VL); both
+    OpenAI-compatible provider (e.g. Together / OpenRouter for Qwen3-VL); both
     args fall back to the configured defaults."""
     if OpenAI is None:
         return None
@@ -91,7 +91,7 @@ def vision_json(
     """Vision call returning parsed JSON. `image_b64` is a data URL or base64.
 
     ``model``/``base_url``/``api_key`` override the defaults so a single call can
-    target a different (e.g. open, OpenAI-compatible) VLM such as Qwen2.5-VL.
+    target a different (e.g. open, OpenAI-compatible) VLM such as Qwen3-VL.
     """
     client = _client(base_url=base_url, api_key=api_key)
     if client is None:

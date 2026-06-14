@@ -39,10 +39,11 @@ class Settings(BaseModel):
     # --- Reference analysis (read Korean text + describe layout) ---
     # This is a *perception* task (OCR + layout), not aesthetic taste, so an open
     # VLM is fully competitive. These default to the main vision model/endpoint
-    # but can be pointed independently at Qwen2.5-VL through an OpenAI-compatible
-    # provider (Together / OpenRouter / DashScope) — no GPU on your side, Railway
-    # stays CPU. e.g. AGENT_ANALYZE_MODEL=Qwen/Qwen2.5-VL-72B-Instruct
-    #      AGENT_ANALYZE_BASE_URL=https://api.together.xyz/v1  AGENT_ANALYZE_API_KEY=...
+    # but can be pointed independently at Qwen3-VL (32-language OCR incl. Korean,
+    # text bounding boxes) through an OpenAI-compatible provider (Together /
+    # OpenRouter / DashScope) — no GPU on your side, Railway stays CPU. e.g.
+    #   AGENT_ANALYZE_MODEL=Qwen/Qwen3-VL-8B-Instruct
+    #   AGENT_ANALYZE_BASE_URL=https://api.together.xyz/v1  AGENT_ANALYZE_API_KEY=...
     analyze_model: str = os.getenv("AGENT_ANALYZE_MODEL", "") or os.getenv(
         "AGENT_VISION_MODEL", "gpt-5.5"
     )

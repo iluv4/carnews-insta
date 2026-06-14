@@ -71,7 +71,7 @@ RAG), so `GET /healthz`, `GET /rag/info`, and `POST /generate` all work in dev.
 - `POST /analyze` — `{ "image" }` (base64 / data URL) → reads the **Korean text**
   (OCR) and describes the **layout** of a reference card as structured JSON
   (`text_blocks`, `layout`, `summary`). A *perception* task, so it runs on
-  GPT-5.5 by default but **flips to Qwen2.5-VL** (or any OpenAI-compatible VLM)
+  GPT-5.5 by default but **flips to Qwen3-VL** (or any OpenAI-compatible VLM)
   by setting `AGENT_ANALYZE_MODEL` / `AGENT_ANALYZE_BASE_URL` / `AGENT_ANALYZE_API_KEY`
   — no GPU on your side, so Railway stays CPU-only.
 

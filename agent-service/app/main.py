@@ -141,7 +141,7 @@ def _slim(partial: dict) -> dict:
 def analyze(req: AnalyzeRequest) -> JSONResponse:
     """Read the Korean text + describe the layout of one reference card image.
 
-    Perception task — runs on GPT-5.5 by default, or Qwen2.5-VL via AGENT_ANALYZE_*.
+    Perception task — runs on GPT-5.5 by default, or Qwen3-VL via AGENT_ANALYZE_*.
     """
     return JSONResponse(analyze_reference(req.image))
 

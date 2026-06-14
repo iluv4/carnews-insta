@@ -6,7 +6,7 @@ layout, so the retriever's summaries are grounded in what the card actually
 shows instead of a guess.
 
 It is a **perception** task (OCR + layout), not aesthetic taste, so an open VLM
-is fully competitive. It runs on GPT-5.5 by default, but flips to **Qwen2.5-VL**
+is fully competitive. It runs on GPT-5.5 by default, but flips to **Qwen3-VL**
 with zero code changes by setting the ``AGENT_ANALYZE_*`` env (an OpenAI-
 compatible provider such as Together / OpenRouter / DashScope) — no GPU needed
 on your side, so Railway stays CPU-only.

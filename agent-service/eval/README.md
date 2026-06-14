@@ -16,7 +16,7 @@ python eval/run_eval.py --self-test
 ## 2. Score real images
 
 Put card-background PNGs in `eval/samples/`, list them in a JSONL manifest
-(see `cases.sample.jsonl`), set `OPENAI_API_KEY` (or point at Qwen2.5-VL via
+(see `cases.sample.jsonl`), set `OPENAI_API_KEY` (or point at Qwen3-VL via
 `OPENAI_BASE_URL` + `AGENT_VISION_MODEL`, see `app/config.py`), then:
 
 ```bash
