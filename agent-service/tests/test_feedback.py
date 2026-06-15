@@ -75,6 +75,23 @@ def test_feedback_collection_and_preference(tmp_path, monkeypatch):
     assert s["top_templates"][0][0] == "t_good"
 
 
+def test_score_correlation(tmp_path, monkeypatch):
+    log = tmp_path / "feedback.jsonl"
+    monkeypatch.setenv("AGENT_FEEDBACK_LOG", str(log))
+
+    # auto and human scores that move together → strong positive correlation
+    for a, h in [(2.0, 3.0), (5.0, 4.0), (7.0, 8.0), (9.0, 9.0)]:
+        fb.log_feedback({"auto_score_before": a, "human_score": h})
+    # a record missing the auto score must be ignored
+    fb.log_feedback({"human_score": 5.0})
+
+    corr = fb.score_correlation()
+    assert corr["n"] == 4
+    assert corr["pearson"] > 0.8
+    assert corr["spearman"] > 0.8
+    assert corr["mean_abs_error"] is not None
+
+
 def test_preference_reranks_retrieval(tmp_path, monkeypatch):
     """A heavily-preferred template should climb the retrieval ranking."""
     from app.config import get_settings

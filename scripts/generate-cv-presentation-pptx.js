@@ -564,6 +564,46 @@ function pipeline(slide, stages, y, h, boxW, gap) {
 })();
 
 // ===========================================================================
+// SLIDE 11.5 — Human-in-the-loop (사람 평가 → 학습)
+// ===========================================================================
+(() => {
+  const s = pptx.addSlide();
+  base(s);
+  kicker(s, "Human-in-the-loop · 사람 평가를 성능으로");
+  title(s, [
+    { text: "사람의 별점이 ", options: { color: C.fg } },
+    { text: "같은 self-correction 루프", options: { color: C.accent } },
+    { text: "를 돌린다", options: { color: C.fg } },
+  ], { fontSize: 25 });
+
+  pipeline(s, [
+    { sub: "Human", t: "별점 + 코멘트", hot: true },
+    { sub: "human_critic", t: "critique로\n변환" },
+    { sub: "reviser", t: "수정 지시" },
+    { sub: "designer→img", t: "재생성" },
+    { sub: "art_director", t: "자동 재채점" },
+  ], 2.55, 1.8, 2.2, 0.22);
+
+  const outs = [
+    { h: "① 즉시 반영", c: C.good, rows: ["POST /revise → 그 카드만 재생성", "auto_score before→after 노출"] },
+    { h: "② 수집", c: C.accent, rows: ["feedback_store JSONL (DB 불필요)", "편집비용·선호 데이터 적재"] },
+    { h: "③ 향후 개선", c: C.purple, rows: ["retriever 선호 재랭킹", "auto↔human 상관으로 자동평가 검증"] },
+  ];
+  outs.forEach((g, i) => {
+    const x = 0.9 + i * 3.95;
+    card(s, x, 4.65, 3.7, 1.85, C.bg2, g.c);
+    s.addText(g.h, { x: x + 0.3, y: 4.8, w: 3.1, h: 0.4, fontFace: FONT, fontSize: 13, bold: true, color: g.c });
+    s.addText(g.rows.map((t) => ({ text: t, options: { bullet: { code: "25B8", indent: 12 }, color: C.fg } })),
+      { x: x + 0.3, y: 5.25, w: 3.1, h: 1.15, fontFace: FONT, fontSize: 11, lineSpacingMultiple: 1.3 });
+  });
+
+  s.addText("핵심: art_director 자동 점수를 사람 점수와 상관(Pearson/Spearman)으로 검증 → 자동 평가가 사람 눈을 대체할 수 있음을 입증하고, 그 심사위원을 그대로 루프 보상으로 재사용.", {
+    x: 0.9, y: 6.62, w: 11.5, h: 0.4, fontFace: FONT, fontSize: 10.5, italic: true, color: C.dim,
+  });
+  footer(s);
+})();
+
+// ===========================================================================
 // SLIDE 12 — 개선할 점 (한계)
 // ===========================================================================
 (() => {
