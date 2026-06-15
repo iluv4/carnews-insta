@@ -1,11 +1,14 @@
 """LangGraph wiring.
 
-    planner → retriever → copywriter ─┬─▶ render_slide ─┐
-                                      ├─▶ render_slide ─┼─▶ collect ─▶ END
-                                      └─▶ render_slide ─┘
-                                       (one branch per slide, in parallel)
+    planner → budgeter → retriever → copywriter ─┬─▶ render_slide ─┐
+                                                 ├─▶ render_slide ─┼─▶ collect ─▶ END
+                                                 └─▶ render_slide ─┘
+                                                  (one branch per slide, in parallel)
 
-`copywriter` produces copy for every slide, then a **fan-out** dispatches one
+`budgeter` applies Test-Time Scaling "budget forcing": it estimates the topic's
+difficulty and sets the inference budget (Best-of-N sample count + revision
+ceiling) for the rest of the run. `copywriter` then samples that many candidates
+and keeps the best (self-consistency), and a **fan-out** dispatches one
 `render_slide` branch per slide via LangGraph's `Send` API. Each branch runs the
 full designer → image_gen → art_director → reviser self-correction loop for its
 own card, independently and in parallel, so an N-slide deck costs roughly the
@@ -22,6 +25,7 @@ from typing import Literal
 from .config import get_settings
 from .nodes import (
     art_director,
+    budgeter,
     copywriter,
     designer,
     image_gen,
@@ -38,9 +42,17 @@ try:
         from langgraph.types import Send
     except Exception:  # pragma: no cover
         from langgraph.constants import Send
+
+    try:  # InMemoryCache + allowed_objects landed in langgraph >=0.2.x
+        from langgraph.cache.memory import InMemoryCache
+        _cache = InMemoryCache(allowed_objects="messages")
+    except Exception:  # pragma: no cover - older builds without cache API
+        _cache = None
+
     _HAS_LANGGRAPH = True
 except Exception:  # pragma: no cover - allows import without the dep installed
     _HAS_LANGGRAPH = False
+    _cache = None
 
 
 def _route_after_critic(state: AgentState) -> Literal["reviser", "done"]:
@@ -142,18 +154,20 @@ def build_graph():
         raise RuntimeError("langgraph is not installed")
     g = StateGraph(AgentState)
     g.add_node("planner", planner)
+    g.add_node("budgeter", budgeter)
     g.add_node("retriever", retriever)
     g.add_node("copywriter", copywriter)
     g.add_node("render_slide", render_slide)
     g.add_node("collect", collect)
 
     g.add_edge(START, "planner")
-    g.add_edge("planner", "retriever")
+    g.add_edge("planner", "budgeter")
+    g.add_edge("budgeter", "retriever")
     g.add_edge("retriever", "copywriter")
     g.add_conditional_edges("copywriter", _dispatch, ["render_slide"])
     g.add_edge("render_slide", "collect")
     g.add_edge("collect", END)
-    return g.compile()
+    return g.compile(cache=_cache)
 
 
 def run_linear(state: AgentState):
@@ -163,8 +177,13 @@ def run_linear(state: AgentState):
     fan-out/fan-in — but runs the slides sequentially, so the service works even
     before `pip install langgraph` and tests can assert node order offline.
     """
-    head = {"planner": planner, "retriever": retriever, "copywriter": copywriter}
-    for name in ["planner", "retriever", "copywriter"]:
+    head = {
+        "planner": planner,
+        "budgeter": budgeter,
+        "retriever": retriever,
+        "copywriter": copywriter,
+    }
+    for name in ["planner", "budgeter", "retriever", "copywriter"]:
         partial = head[name](state)
         state.update(partial)
         yield name, partial

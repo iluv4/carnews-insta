@@ -57,12 +57,26 @@ def _reasoning_params(model: str, max_tokens: int) -> dict[str, Any]:
     return {"max_tokens": max_tokens}
 
 
-def chat_json(system: str, user: str, *, max_tokens: int = 1200) -> dict[str, Any]:
-    """Reasoning/text call that returns parsed JSON. Returns {} on failure."""
+def chat_json(
+    system: str,
+    user: str,
+    *,
+    max_tokens: int = 1200,
+    temperature: Optional[float] = None,
+) -> dict[str, Any]:
+    """Reasoning/text call that returns parsed JSON. Returns {} on failure.
+
+    ``temperature`` drives Best-of-N candidate diversity (see app/tts.py). It is
+    only sent to non-reasoning models — GPT-5 / o-series reject the param and
+    sample their own variation across calls anyway.
+    """
     client = _client()
     if client is None:
         return {}
     s = get_settings()
+    params = _reasoning_params(s.text_model, max_tokens)
+    if temperature is not None and not _is_reasoning(s.text_model):
+        params["temperature"] = temperature
     try:
         res = client.chat.completions.create(
             model=s.text_model,
@@ -71,7 +85,7 @@ def chat_json(system: str, user: str, *, max_tokens: int = 1200) -> dict[str, An
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            **_reasoning_params(s.text_model, max_tokens),
+            **params,
         )
         return json.loads(res.choices[0].message.content or "{}")
     except Exception:

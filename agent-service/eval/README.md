@@ -1,44 +1,50 @@
-# Critic eval harness
+# Critic Evaluation — is the quality gate trustworthy?
 
-A small harness to (1) guard the Art Director critic's deterministic scoring
-math and (2) measure how the real vision critic scores your card backgrounds.
+The agent loop uses the **Art Director** vision critic's 0~10 score as its
+quality gate: a card is re-generated until the score clears
+`AGENT_QUALITY_THRESHOLD`. That only means something if the score tracks human
+judgement. This harness measures exactly that.
 
-## 1. Logic self-test (no API key, CI-safe)
+## What it reports
 
-Verifies the weighted aggregation + text-gate math in
-`app/nodes/art_director.py`:
+For a golden set of `(rendered card, human score)` pairs it runs the real critic
+and computes:
+
+| Metric | Meaning |
+|--------|---------|
+| **Pearson r** | linear agreement between human and critic scores |
+| **Spearman ρ** | rank agreement (robust to scale/offset) |
+| **MAE / RMSE** | average / penalised score error |
+| **threshold agreement** | do human & critic agree on pass/fail at the gate? (+ confusion tp/tn/fp/fn) |
+
+## Run
 
 ```bash
 cd agent-service
-python eval/run_eval.py --self-test
+
+# 1) Harness check — no key, no images needed (passthrough at threshold)
+python -m eval.critic_eval --golden eval/golden_set.example.jsonl
+
+# 2) Real eval — needs OPENAI_API_KEY and a filled golden set
+python -m eval.critic_eval --golden eval/golden_set.jsonl --json out/critic_report.json
 ```
 
-## 2. Score real images
+## Building the golden set
 
-Put card-background PNGs in `eval/samples/`, list them in a JSONL manifest
-(see `cases.sample.jsonl`), set `OPENAI_API_KEY` (or point at Qwen3-VL via
-`OPENAI_BASE_URL` + `AGENT_VISION_MODEL`, see `app/config.py`), then:
+1. Generate cards (`POST /generate`) and save each background PNG.
+2. Score each yourself 0~10 with the **same rubric** the critic uses
+   (hierarchy · palette · overlay space · artifacts · no baked-in text).
+3. Put one JSON line per card in `golden_set.jsonl` — see
+   `golden_set.example.jsonl` for the schema (`id`, `image_path`, `human_score`,
+   `note`). ~10–15 cards is enough to be directional.
 
-```bash
-python eval/run_eval.py --cases eval/cases.sample.jsonl --out eval/report.md
-```
+> Small-n caveat: with fewer than ~8 cards the correlations are directional, not
+> statistically significant. The harness prints this reminder automatically.
 
-This writes `eval/report.md` (human-readable table) and `eval/report.json`.
-Add an `expected` band (`good|ok|bad`) to each case to get **band accuracy**
-against your own labels — that's how you tell whether a prompt/model change
-actually improved the critic instead of guessing.
+## Why it exists
 
-## Rubric
-
-The critic grades five weighted axes (see `RUBRIC_WEIGHTS`):
-
-| axis | weight | what it measures |
-| --- | --- | --- |
-| composition | 0.25 | 구도 / 시각적 위계 |
-| overlay_space | 0.25 | 하단 텍스트 오버레이용 여백 |
-| color_mood | 0.20 | 색 · 무드의 매력 |
-| cleanliness | 0.15 | 잡티 · 아티팩트 없음 |
-| text_free | 0.15 | 이미지 내 글자 없음 (위반 시 점수 상한 4.0) |
-
-The overall score is aggregated **in Python**, not by the model, so the quality
-gate is stable and explainable.
+Validating the judge is the honest counterpart to *using* a judge. This closes
+the gap flagged in `docs/PROFESSOR_SHOWCASE.md` §8 (Q5) — "측정 안 함 < 불완전하게라도
+측정" — and is a concrete, reproducible artifact to show alongside the demo.
+No `numpy`/`scipy` dependency: the statistics are pure-Python so the eval runs
+anywhere the service does.
