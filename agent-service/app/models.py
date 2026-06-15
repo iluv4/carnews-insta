@@ -18,11 +18,21 @@ except Exception:  # pragma: no cover
     OpenAI = None  # type: ignore
 
 
-def _client() -> Optional["OpenAI"]:
-    s = get_settings()
-    if not s.has_openai or OpenAI is None:
+def _client(base_url: Optional[str] = None, api_key: Optional[str] = None) -> Optional["OpenAI"]:
+    """Build an OpenAI(-compatible) client. ``base_url`` lets calls target an
+    OpenAI-compatible provider (e.g. Together / OpenRouter for Qwen3-VL); both
+    args fall back to the configured defaults."""
+    if OpenAI is None:
         return None
-    return OpenAI(api_key=s.openai_api_key)
+    s = get_settings()
+    key = api_key or s.openai_api_key
+    if not key or key in {"dummy_key", "your_openai_api_key_here"}:
+        return None
+    kwargs: dict[str, Any] = {"api_key": key}
+    url = base_url or s.openai_base_url
+    if url:
+        kwargs["base_url"] = url
+    return OpenAI(**kwargs)
 
 
 def _is_reasoning(model: str) -> bool:
@@ -47,12 +57,26 @@ def _reasoning_params(model: str, max_tokens: int) -> dict[str, Any]:
     return {"max_tokens": max_tokens}
 
 
-def chat_json(system: str, user: str, *, max_tokens: int = 1200) -> dict[str, Any]:
-    """Reasoning/text call that returns parsed JSON. Returns {} on failure."""
+def chat_json(
+    system: str,
+    user: str,
+    *,
+    max_tokens: int = 1200,
+    temperature: Optional[float] = None,
+) -> dict[str, Any]:
+    """Reasoning/text call that returns parsed JSON. Returns {} on failure.
+
+    ``temperature`` drives Best-of-N candidate diversity (see app/tts.py). It is
+    only sent to non-reasoning models — GPT-5 / o-series reject the param and
+    sample their own variation across calls anyway.
+    """
     client = _client()
     if client is None:
         return {}
     s = get_settings()
+    params = _reasoning_params(s.text_model, max_tokens)
+    if temperature is not None and not _is_reasoning(s.text_model):
+        params["temperature"] = temperature
     try:
         res = client.chat.completions.create(
             model=s.text_model,
@@ -61,23 +85,37 @@ def chat_json(system: str, user: str, *, max_tokens: int = 1200) -> dict[str, An
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            **_reasoning_params(s.text_model, max_tokens),
+            **params,
         )
         return json.loads(res.choices[0].message.content or "{}")
     except Exception:
         return {}
 
 
-def vision_json(system: str, prompt: str, image_b64: str, *, max_tokens: int = 800) -> dict[str, Any]:
-    """Vision critique call. `image_b64` is a data URL or base64 payload."""
-    client = _client()
+def vision_json(
+    system: str,
+    prompt: str,
+    image_b64: str,
+    *,
+    max_tokens: int = 800,
+    model: Optional[str] = None,
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> dict[str, Any]:
+    """Vision call returning parsed JSON. `image_b64` is a data URL or base64.
+
+    ``model``/``base_url``/``api_key`` override the defaults so a single call can
+    target a different (e.g. open, OpenAI-compatible) VLM such as Qwen3-VL.
+    """
+    client = _client(base_url=base_url, api_key=api_key)
     if client is None:
         return {}
     s = get_settings()
+    mdl = model or s.vision_model
     url = image_b64 if image_b64.startswith("data:") else f"data:image/png;base64,{image_b64}"
     try:
         res = client.chat.completions.create(
-            model=s.vision_model,
+            model=mdl,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system},
@@ -89,7 +127,7 @@ def vision_json(system: str, prompt: str, image_b64: str, *, max_tokens: int = 8
                     ],
                 },
             ],
-            **_reasoning_params(s.vision_model, max_tokens),
+            **_reasoning_params(mdl, max_tokens),
         )
         return json.loads(res.choices[0].message.content or "{}")
     except Exception:

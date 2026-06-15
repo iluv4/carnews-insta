@@ -14,11 +14,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from .analyze import analyze_reference
 from .config import get_settings
 from .feedback_store import log_feedback, stats as feedback_stats
 from .graph import build_graph, run_linear, revise_with_feedback, _HAS_LANGGRAPH
 from .rag.store import get_store
-from .schemas import AgentState, GenerateRequest, ReviseRequest
+from .schemas import AgentState, AnalyzeRequest, GenerateRequest, ReviseRequest
 
 app = FastAPI(title="carnews-agent", version="1.0.0")
 app.add_middleware(
@@ -43,6 +44,11 @@ def healthz() -> JSONResponse:
             "langgraph": _HAS_LANGGRAPH,
             "openai": s.has_openai,
             "models": {"text": s.text_model, "vision": s.vision_model, "image": s.image_model},
+            "tts": {
+                "enabled": s.tts_enabled,
+                "samples": [s.tts_min_samples, s.tts_max_samples],
+                "max_revisions_ceiling": s.tts_max_revisions_ceiling,
+            },
         }
     )
 
@@ -110,6 +116,14 @@ async def _stream(req: GenerateRequest) -> AsyncGenerator[str, None]:
             "critique": state.get("critique"),
             "revisions": state.get("revision", 0),
             "provider": state.get("provider"),
+            # Test-Time Scaling diagnostics: how much inference compute this
+            # request was granted and the reward of the chosen copy.
+            "tts": {
+                "difficulty": state.get("difficulty"),
+                "copy_candidates": state.get("copy_candidates"),
+                "copy_reward": state.get("copy_reward"),
+                "budget": state.get("budget"),
+            },
         },
     )
 
@@ -130,6 +144,15 @@ def _slim(partial: dict) -> dict:
         if isinstance(out.get(key), list):
             out[key] = [_slim_card(c) for c in out[key]]
     return out
+
+
+@app.post("/analyze")
+def analyze(req: AnalyzeRequest) -> JSONResponse:
+    """Read the Korean text + describe the layout of one reference card image.
+
+    Perception task — runs on GPT-5.5 by default, or Qwen3-VL via AGENT_ANALYZE_*.
+    """
+    return JSONResponse(analyze_reference(req.image))
 
 
 @app.post("/generate")

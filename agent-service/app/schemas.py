@@ -16,6 +16,10 @@ class GenerateRequest(BaseModel):
     render_image: bool = True
 
 
+class AnalyzeRequest(BaseModel):
+    image: str = Field(..., description="Reference card image as base64 or a data URL.")
+
+
 class SlidePlan(BaseModel):
     role: str  # cover | review | menu | cta | info | closing
     intent: str
@@ -27,14 +31,21 @@ class RetrievedExample(BaseModel):
     summary: str
 
 
-class Critique(BaseModel):
+class AxisScore(BaseModel):
+    """One axis of the art-director rubric (0–10) with a one-line comment."""
     score: float
-    readability: str
-    hierarchy: str
-    typography: str
-    brand_consistency: str
-    issues: list[str] = []
-    fixes: list[str] = []
+    comment: str = ""
+
+
+class Critique(BaseModel):
+    """Art-director critique. ``score`` is the weighted aggregate of ``axes``
+    (composition, overlay_space, color_mood, cleanliness, text_free), computed
+    deterministically by ``app.nodes.art_director.aggregate``."""
+    score: float
+    axes: dict[str, AxisScore] = Field(default_factory=dict)
+    has_text: bool = False
+    issues: list[str] = Field(default_factory=list)
+    fixes: list[str] = Field(default_factory=list)
 
 
 class HumanFeedback(BaseModel):
@@ -73,10 +84,16 @@ class AgentState(TypedDict, total=False):
     render_image: bool
     # planner
     plan: list[dict[str, Any]]
+    # budgeter (Test-Time Scaling: difficulty → inference budget)
+    difficulty: float
+    n_samples: int
+    budget: dict[str, Any]
     # retriever (RAG)
     examples: list[dict[str, Any]]
-    # copywriter
+    # copywriter (Best-of-N self-consistency diagnostics)
     copy: dict[str, Any]
+    copy_reward: float
+    copy_candidates: int
     # designer / image / critic — these hold the *current slide's* working values
     # (a single card during a render_slide fan-out branch, or the cover for the
     # backward-compatible single-card view exposed by `collect`).

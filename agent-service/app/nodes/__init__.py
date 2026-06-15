@@ -1,4 +1,5 @@
 from .planner import planner
+from .budgeter import budgeter
 from .retriever import retriever
 from .copywriter import copywriter
 from .designer import designer
@@ -9,6 +10,7 @@ from .human_critic import human_critic
 
 __all__ = [
     "planner",
+    "budgeter",
     "retriever",
     "copywriter",
     "designer",
