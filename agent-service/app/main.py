@@ -42,6 +42,11 @@ def healthz() -> JSONResponse:
             "langgraph": _HAS_LANGGRAPH,
             "openai": s.has_openai,
             "models": {"text": s.text_model, "vision": s.vision_model, "image": s.image_model},
+            "tts": {
+                "enabled": s.tts_enabled,
+                "samples": [s.tts_min_samples, s.tts_max_samples],
+                "max_revisions_ceiling": s.tts_max_revisions_ceiling,
+            },
         }
     )
 
@@ -109,6 +114,14 @@ async def _stream(req: GenerateRequest) -> AsyncGenerator[str, None]:
             "critique": state.get("critique"),
             "revisions": state.get("revision", 0),
             "provider": state.get("provider"),
+            # Test-Time Scaling diagnostics: how much inference compute this
+            # request was granted and the reward of the chosen copy.
+            "tts": {
+                "difficulty": state.get("difficulty"),
+                "copy_candidates": state.get("copy_candidates"),
+                "copy_reward": state.get("copy_reward"),
+                "budget": state.get("budget"),
+            },
         },
     )
 
