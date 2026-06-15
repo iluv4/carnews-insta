@@ -1,15 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { PERSONAS } from '@/lib/prompts';
 
 // Self-contained demo of the RAG + multi-agent pipeline. Streams Server-Sent
 // Events from /api/agent-generate (which proxies the FastAPI + LangGraph
 // service) and shows each graph node firing in real time, then the final card.
 type NodeEvent = { node: string; update: Record<string, unknown> };
 
+type SlideCard = {
+  index: number;
+  role?: string;
+  copy?: CoverCopy;
+  image_prompt?: string;
+  card_image_b64?: string | null;
+  score?: number;
+};
+
 type DonePayload = {
   copy?: { slides?: Array<Record<string, unknown>> };
   examples?: Array<{ template_id: string; score: number; summary: string }>;
+  // The full deck — one rendered background per slide (fan-out result).
+  cards?: SlideCard[];
   image_prompt?: string;
   card_image_b64?: string | null;
   score?: number;
@@ -115,6 +127,87 @@ function CardPreview({
   );
 }
 
+type AgentHealth = {
+  ok: boolean;
+  embedding: 'active' | 'lexical-fallback' | 'unknown';
+  openai?: boolean | null;
+  templates_indexed?: number | null;
+  embedded?: number | null;
+  agent_url?: string;
+  error?: string;
+};
+
+// Live "is embedding actually on?" indicator — polls /api/agent-health (which
+// proxies the agent-service /rag/info) so the deployment's real state is visible
+// at a glance instead of having to curl the Python service directly.
+function EmbeddingStatus() {
+  const [health, setHealth] = useState<AgentHealth | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/agent-health', { cache: 'no-store' });
+        const data = (await res.json()) as AgentHealth;
+        if (alive) setHealth(data);
+      } catch {
+        if (alive) setHealth({ ok: false, embedding: 'unknown', error: 'fetch failed' });
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const tone =
+    loading || !health
+      ? { dot: '#999', bg: '#f3f4f6', fg: '#555', label: '임베딩 상태 확인 중…' }
+      : health.embedding === 'active'
+        ? {
+            dot: '#16a34a',
+            bg: '#ecfdf5',
+            fg: '#065f46',
+            label: `임베딩 ON · ${health.embedded ?? 0}/${health.templates_indexed ?? 0} 벡터`,
+          }
+        : health.embedding === 'lexical-fallback'
+          ? {
+              dot: '#f59e0b',
+              bg: '#fffbeb',
+              fg: '#92400e',
+              label: `임베딩 OFF · 렉시컬 폴백 (${health.templates_indexed ?? 0} 템플릿)`,
+            }
+          : { dot: '#dc2626', bg: '#fef2f2', fg: '#991b1b', label: 'agent-service 연결 안 됨' };
+
+  return (
+    <span
+      title={
+        health
+          ? `embedding=${health.embedding} · openai=${String(health.openai)} · ${health.agent_url ?? ''}${health.error ? ` · ${health.error}` : ''}`
+          : undefined
+      }
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 12px',
+        borderRadius: 999,
+        background: tone.bg,
+        color: tone.fg,
+        fontSize: 13,
+        fontWeight: 600,
+      }}
+    >
+      <span
+        style={{ width: 9, height: 9, borderRadius: '50%', background: tone.dot, flexShrink: 0 }}
+      />
+      {tone.label}
+    </span>
+  );
+}
+
 const NODE_LABEL: Record<string, string> = {
   planner: '🧭 Planner — 슬라이드 구성',
   retriever: '🔎 Retriever — RAG 검색',
@@ -132,6 +225,41 @@ export default function AgentDemoPage() {
   const [events, setEvents] = useState<NodeEvent[]>([]);
   const [done, setDone] = useState<DonePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 프롬프트 다듬기 상태: 선택한 페르소나, 다듬는 중 여부, 변경 설명, 되돌리기용 원본.
+  const [personaId, setPersonaId] = useState(PERSONAS[0].id);
+  const [refining, setRefining] = useState(false);
+  const [refineNote, setRefineNote] = useState<string | null>(null);
+  const [prevTopic, setPrevTopic] = useState<string | null>(null);
+
+  async function refine() {
+    if (!topic.trim() || refining) return;
+    setRefining(true);
+    setRefineNote(null);
+    try {
+      const res = await fetch('/api/refine-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: topic, personaId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'refine failed');
+      setPrevTopic(topic);
+      setTopic(data.refined);
+      setRefineNote(data.notes || `${data.persona?.label ?? ''} 관점으로 다듬었어요.`);
+    } catch (e) {
+      setRefineNote(`⚠️ 다듬기 실패: ${(e as Error).message}`);
+    } finally {
+      setRefining(false);
+    }
+  }
+
+  function undoRefine() {
+    if (prevTopic === null) return;
+    setTopic(prevTopic);
+    setPrevTopic(null);
+    setRefineNote(null);
+  }
 
   async function run() {
     setRunning(true);
@@ -168,17 +296,7 @@ export default function AgentDemoPage() {
         }
       }
     } catch (e) {
-      const msg = (e as Error).message || String(e);
-      // Same-origin fetch rejections ("Load failed" / "Failed to fetch") mean the
-      // request never completed — almost always the request was dropped because
-      // the agent pipeline ran past the route timeout (image gen + revision loop
-      // are slow), or the agent service is unreachable.
-      const dropped = /load failed|failed to fetch|networkerror/i.test(msg);
-      setError(
-        dropped
-          ? `요청이 끊겼습니다 (${msg}). 백엔드가 응답을 끝내지 못했을 가능성 — agent-service가 떠 있는지, 이미지 생성이 타임아웃되진 않았는지 확인하세요.`
-          : msg,
-      );
+      setError((e as Error).message);
     } finally {
       setRunning(false);
     }
@@ -198,13 +316,66 @@ export default function AgentDemoPage() {
         <span style={{ fontSize: 12 }}>※ 한국어 텍스트는 이미지에 굽지 않고 브라우저에서 또렷한 타이포로 오버레이</span>
       </p>
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+      <div style={{ marginTop: 12 }}>
+        <EmbeddingStatus />
+      </div>
+
+      {/* 페르소나(역할) 선택 — 누르면 다듬기 단계에서 해당 역할이 자동 부여된다. */}
+      <div style={{ marginTop: 16 }}>
+        <p style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>
+          ① 나는 누구? (역할을 고르면 그 관점으로 다듬어져요)
+        </p>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {PERSONAS.map((p) => {
+            const active = p.id === personaId;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setPersonaId(p.id)}
+                title={p.guide}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 999,
+                  border: active ? '1px solid #111' : '1px solid #ddd',
+                  background: active ? '#111' : '#fff',
+                  color: active ? '#fff' : '#333',
+                  fontSize: 13,
+                  fontWeight: active ? 700 : 500,
+                  cursor: 'pointer',
+                }}
+              >
+                {p.emoji} {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <p style={{ fontSize: 13, color: '#666', margin: '16px 0 6px' }}>
+        ② 주제를 대충 적고 ✨ 다듬기를 눌러보세요
+      </p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
-          placeholder="주제를 입력하세요"
+          placeholder="대충 입력해도 돼요 (예: 신형 전기차 나옴)"
           style={{ flex: 1, minWidth: 240, padding: 10, border: '1px solid #ddd', borderRadius: 8 }}
         />
+        <button
+          onClick={refine}
+          disabled={refining || running || !topic.trim()}
+          style={{
+            padding: '10px 16px',
+            borderRadius: 8,
+            border: '1px solid #111',
+            background: '#fff',
+            color: refining || !topic.trim() ? '#999' : '#111',
+            fontWeight: 700,
+            cursor: refining || !topic.trim() ? 'default' : 'pointer',
+          }}
+        >
+          {refining ? '다듬는 중…' : '✨ 다듬기'}
+        </button>
         <input
           type="number"
           min={1}
@@ -229,6 +400,28 @@ export default function AgentDemoPage() {
           {running ? '생성 중…' : '생성'}
         </button>
       </div>
+
+      {refineNote && (
+        <p style={{ fontSize: 13, color: '#555', marginTop: 8 }}>
+          {refineNote.startsWith('⚠️') ? refineNote : `✨ ${refineNote}`}
+          {prevTopic !== null && (
+            <button
+              onClick={undoRefine}
+              style={{
+                marginLeft: 8,
+                padding: '2px 8px',
+                borderRadius: 6,
+                border: '1px solid #ddd',
+                background: '#fff',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              되돌리기
+            </button>
+          )}
+        </p>
+      )}
 
       {error && <p style={{ color: '#c00', marginTop: 12 }}>⚠️ {error}</p>}
 
@@ -267,12 +460,35 @@ export default function AgentDemoPage() {
 
           {/* Text is rendered as a crisp CSS overlay — never baked into the
               image — so Korean glyphs stay sharp and never garble. The diffusion
-              output (if any) is used only as a text-free background. */}
-          <CardPreview
-            imageB64={done.card_image_b64 ?? null}
-            cover={(done.copy?.slides?.[0] ?? {}) as CoverCopy}
-            brand={(done.copy?.slides?.[0] as CoverCopy | undefined)?.brand}
-          />
+              output (if any) is used only as a text-free background. The deck is
+              the fan-out result: one rendered card per slide. */}
+          {done.cards && done.cards.length > 0 ? (
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
+              {done.cards.map((card) => {
+                const cover = (card.copy ?? {}) as CoverCopy;
+                return (
+                  <figure key={card.index} style={{ margin: 0 }}>
+                    <CardPreview
+                      imageB64={card.card_image_b64 ?? null}
+                      cover={cover}
+                      brand={cover.brand}
+                    />
+                    <figcaption style={{ color: '#888', fontSize: 12, marginTop: 4 }}>
+                      슬라이드 {card.index + 1}
+                      {card.role ? ` · ${card.role}` : ''}
+                      {typeof card.score === 'number' ? ` · 점수 ${card.score}` : ''}
+                    </figcaption>
+                  </figure>
+                );
+              })}
+            </div>
+          ) : (
+            <CardPreview
+              imageB64={done.card_image_b64 ?? null}
+              cover={(done.copy?.slides?.[0] ?? {}) as CoverCopy}
+              brand={(done.copy?.slides?.[0] as CoverCopy | undefined)?.brand}
+            />
+          )}
           {!done.card_image_b64 && (
             <p style={{ color: '#999', marginTop: 8, fontSize: 12 }}>
               (배경 이미지 없음 — OPENAI_API_KEY 미설정 시 카피 오버레이만 미리보기)

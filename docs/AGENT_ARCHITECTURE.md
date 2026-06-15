@@ -33,23 +33,28 @@ planner → retriever → copywriter → designer → image_gen → art_director
 ```
 
 1. **planner** (GPT-5.5) — decomposes the topic into per-slide roles + intent.
-2. **retriever** (RAG) — embeds the topic and pulls the top-k most similar of
+2. **budgeter** (Test-Time Scaling) — estimates the topic's difficulty and forces
+   the per-request inference budget (Best-of-N sample count + revision ceiling).
+   See [Test-Time Scaling](#test-time-scaling-no-gpu) below.
+3. **retriever** (RAG) — embeds the topic and pulls the top-k most similar of
    the 45 real saved templates. This is genuine retrieval: we ground generation
    in human-made designs, not the model's prior. Backed by **pgvector** when
    `DATABASE_URL` is set, otherwise an in-process numpy index, otherwise a
    lexical (token + CJK-bigram) fallback so dev works with no key.
-3. **copywriter** (GPT-5.5) — writes slide copy conditioned on the retrieved
-   exemplars' tone.
-4. **designer** (GPT-5.5) — composes the art-direction prompt for the image
+4. **copywriter** (GPT-5.5) — writes slide copy conditioned on the retrieved
+   exemplars' tone. Runs **Best-of-N self-consistency**: samples `n_samples`
+   candidates (the budget forced above), scores each with a reward judge, keeps
+   the best.
+5. **designer** (GPT-5.5) — composes the art-direction prompt for the image
    model, folding in any revision notes from a previous loop.
-5. **image_gen** (**gpt-image-2**) — full-card render. Text is baked into the
+6. **image_gen** (**gpt-image-2**) — full-card render. Text is baked into the
    image (the chosen design), using the 2026 model's 2K multilingual text.
-6. **art_director** (GPT-5.2 vision) — scores the render against a rubric
+7. **art_director** (GPT-5.2 vision) — scores the render against a rubric
    (readability/contrast, hierarchy, Korean typography, brand consistency,
    artifacts) and lists concrete fixes.
-7. **reviser** — converts those fixes into instructions and **loops back** to
+8. **reviser** — converts those fixes into instructions and **loops back** to
    the designer. Repeats until the score clears `AGENT_QUALITY_THRESHOLD` or
-   `AGENT_MAX_REVISIONS` is hit.
+   the budget's revision ceiling is hit.
 
 ### Why this isn't a glorified prompt chain
 
@@ -61,6 +66,38 @@ planner → retriever → copywriter → designer → image_gen → art_director
   and ranks by cosine similarity — real RAG.
 - **It self-evaluates.** A vision critic closes the loop, so quality is measured,
   not assumed.
+
+## Test-Time Scaling (no GPU)
+
+Quality is raised with **inference** compute only — no fine-tuning, no GPU, no
+extra training data. Two techniques from the test-time-scaling literature, in
+`agent-service/app/tts.py`:
+
+- **Best-of-N self-consistency** (`copywriter`). A single greedy decode is high
+  variance: one draft can fumble the hook. Instead we sample N copy candidates
+  (candidate 0 greedy, the rest at temperature for diversity), score each with a
+  reward judge (`score_copy` — an LLM editor, or a deterministic heuristic with
+  no key), and keep the best. More samples → more reliably good copy.
+- **Budget forcing — S1** (`budgeter`). Spending a flat N on every request wastes
+  compute on easy topics and starves hard ones. The budgeter estimates topic
+  difficulty (0..1) and maps it to a budget: easy → 1 sample + the default
+  revision cap; hard → up to `AGENT_TTS_MAX_SAMPLES` + a higher revision ceiling.
+  That budget flows into the copywriter (N) and every `render_slide` critique
+  loop (revision ceiling).
+
+This is the project's analogue of pushing a small model toward frontier
+reasoning *without* training it — the "Method 01" path for teams with no GPU.
+
+| Knob | Default | Env |
+|------|---------|-----|
+| TTS on/off | `true` | `AGENT_TTS_ENABLED` |
+| Best-of-N range | `1`–`4` | `AGENT_TTS_MIN_SAMPLES` / `AGENT_TTS_MAX_SAMPLES` |
+| Candidate temperature | `0.9` | `AGENT_TTS_TEMPERATURE` |
+| Revision ceiling (hard topics) | `4` | `AGENT_TTS_MAX_REVISIONS_CEILING` |
+
+The `/healthz` response reports the active TTS config, and every `/generate`
+`done` event carries a `tts` block (difficulty, candidates scored, chosen
+reward, full budget) for observability.
 
 ## Models (2026-06)
 
