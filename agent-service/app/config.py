@@ -42,6 +42,10 @@ class Settings(BaseModel):
         os.path.join(os.path.dirname(__file__), "..", "..", "src", "templates"),
     )
     rag_top_k: int = int(os.getenv("AGENT_RAG_TOP_K", "4"))
+    # How strongly accumulated human preference re-ranks retrieval. The blended
+    # score is `similarity + pref_weight * mean_human_score(0..1)`, so 0 disables
+    # the human signal and larger values let well-liked templates surface more.
+    pref_weight: float = float(os.getenv("AGENT_PREF_WEIGHT", "0.15"))
 
     # --- Agent loop ---
     # The Art Director critique → Reviser loop runs until the score clears the

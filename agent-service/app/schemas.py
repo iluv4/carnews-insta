@@ -37,6 +37,32 @@ class Critique(BaseModel):
     fixes: list[str] = []
 
 
+class HumanFeedback(BaseModel):
+    """A human's evaluation of a rendered card — the manual counterpart to the
+    Art Director's automated critique. Same shape the reviser already consumes
+    (a score + free-text fixes), so it slots into the existing revision loop."""
+    score: float = Field(..., ge=0, le=10, description="Human quality score, 0-10.")
+    notes: list[str] = Field(default_factory=list, description="Concrete fixes the human wants.")
+    seconds: Optional[float] = Field(None, description="Time the human spent reviewing/editing (edit-cost metric).")
+
+
+class ReviseRequest(BaseModel):
+    """Re-render one card guided by human feedback (human-in-the-loop revision)."""
+    topic: str
+    brand: Optional[str] = None
+    audience: Optional[str] = None
+    # The card's copy slide (role/title/body…) being revised.
+    slide: dict[str, Any] = Field(default_factory=dict)
+    # The retrieved exemplars used for this card — carries template_ids so the
+    # human score can be attributed back to templates for preference learning.
+    examples: list[dict[str, Any]] = Field(default_factory=list)
+    design_brief: dict[str, Any] = Field(default_factory=dict)
+    image_prompt: Optional[str] = None
+    auto_score_before: Optional[float] = Field(None, description="Art Director score before this revision.")
+    render_image: bool = True
+    feedback: HumanFeedback
+
+
 class AgentState(TypedDict, total=False):
     """Mutable state threaded through every node of the LangGraph."""
     # inputs
@@ -64,6 +90,9 @@ class AgentState(TypedDict, total=False):
     max_revisions: int
     threshold: float
     revision_notes: list[str]
+    # human-in-the-loop: a person's critique, injected in place of (or alongside)
+    # the Art Director's. Carries the same {score, fixes} contract the reviser reads.
+    human_feedback: dict[str, Any]
     # fan-out: which slide this branch is rendering
     index: int
     # Per-slide outputs accumulated from the parallel render_slide branches.

@@ -15,9 +15,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .config import get_settings
-from .graph import build_graph, run_linear, _HAS_LANGGRAPH
+from .feedback_store import log_feedback, stats as feedback_stats
+from .graph import build_graph, run_linear, revise_with_feedback, _HAS_LANGGRAPH
 from .rag.store import get_store
-from .schemas import AgentState, GenerateRequest
+from .schemas import AgentState, GenerateRequest, ReviseRequest
 
 app = FastAPI(title="carnews-agent", version="1.0.0")
 app.add_middleware(
@@ -138,3 +139,59 @@ async def generate(req: GenerateRequest) -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/revise")
+def revise(req: ReviseRequest) -> JSONResponse:
+    """Human-in-the-loop revision: a person's evaluation re-renders one card and
+    is logged for edit-cost metrics + preference learning."""
+    s = get_settings()
+    state: AgentState = {
+        "topic": req.topic,
+        "brand": req.brand,
+        "audience": req.audience,
+        "examples": req.examples,
+        "copy": {"slides": [req.slide]},
+        "design_brief": req.design_brief,
+        "image_prompt": req.image_prompt,
+        "render_image": req.render_image,
+        "revision": 0,
+        "revision_notes": [],
+        "threshold": s.quality_threshold,
+        "max_revisions": s.max_revisions,
+        "auto_score_before": req.auto_score_before,
+        "human_feedback": req.feedback.model_dump(),
+    }
+    result = revise_with_feedback(state)
+
+    record = log_feedback(
+        {
+            "kind": "revise",
+            "topic": req.topic,
+            "template_ids": [e.get("template_id") for e in req.examples if e.get("template_id")],
+            "human_score": result["human_score"],
+            "human_notes": req.feedback.notes,
+            "auto_score_before": result["auto_score_before"],
+            "auto_score_after": result["auto_score_after"],
+            "seconds": req.feedback.seconds,
+            "regenerations": 1,
+            "condition": "human-critic",
+        }
+    )
+
+    return JSONResponse(
+        {
+            # The regenerated card, including its image bytes when rendered.
+            "card": result["card"],
+            "human_score": result["human_score"],
+            "auto_score_before": result["auto_score_before"],
+            "auto_score_after": result["auto_score_after"],
+            "logged_at": record["ts"],
+        }
+    )
+
+
+@app.get("/feedback/stats")
+def feedback_stats_endpoint() -> JSONResponse:
+    """Aggregate human feedback: counts, mean score, auto-score gain, top templates."""
+    return JSONResponse(feedback_stats())
