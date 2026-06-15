@@ -47,3 +47,6 @@ __pycache__/
 .venv/
 agent-service/.venv/
 .pytest_cache/
+
+# agent-service runtime human-feedback log (collected at runtime)
+agent-service/data/

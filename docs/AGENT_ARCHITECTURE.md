@@ -67,6 +67,39 @@ planner → retriever → copywriter → designer → image_gen → art_director
 - **It self-evaluates.** A vision critic closes the loop, so quality is measured,
   not assumed.
 
+## Human-in-the-loop: human evaluation that feeds back
+
+The critique→revision loop above is fully automated (`art_director` is the judge).
+But the same loop also accepts a **human** as the critic, so a person's eyes can
+drive regeneration — and that feedback is collected to improve the system over time.
+
+```
+human score + fixes ─▶ human_critic ─▶ reviser ─▶ designer ─▶ image_gen ─▶ art_director(re-score)
+        │                                                                         │
+        └────────────────────────── feedback_store (JSONL) ──────────────────────┘
+                                              │
+                 ┌────────────────────────────┼─────────────────────────────┐
+                 ▼                             ▼                             ▼
+        edit-cost metric            preference re-ranking            preference dataset
+        (Table 1, measure_control)  (retriever up-ranks liked        (future fine-tuning /
+                                     templates in *future* runs)      learned reward)
+```
+
+- **Immediate reflection.** `POST /revise` takes a card's context + a
+  `HumanFeedback {score, notes, seconds}`. `human_critic` converts it into the
+  exact `{score, fixes}` contract `art_director` produces, so the existing
+  `reviser → designer → image_gen` path re-renders the card guided by the human,
+  then the automated critic re-scores it. The response carries
+  `auto_score_before/after` so the human-driven improvement is visible.
+- **Collection.** Every revision is appended to an append-only JSONL
+  (`AGENT_FEEDBACK_LOG`, default `agent-service/data/feedback.jsonl`) by
+  `feedback_store`. No DB required — same offline-first principle as the RAG store.
+- **Future-run improvement.** `retriever` blends similarity with each template's
+  mean human score (`AGENT_PREF_WEIGHT`), so designs people rated highly surface
+  more in later generations. `GET /feedback/stats` summarizes counts, mean score,
+  mean auto-score gain, and the top templates.
+- **Paper Table 1.** `scripts/measure_control.py --feedback-log` reads the same
+  JSONL to fill the edit-cost row from real human sessions.
 ## Test-Time Scaling (no GPU)
 
 Quality is raised with **inference** compute only — no fine-tuning, no GPU, no

@@ -176,6 +176,43 @@ def _load(path: str) -> "np.ndarray":
     return np.asarray(Image.open(path).convert("RGB"))
 
 
+def _load_feedback_edit_records(path: Optional[str]) -> list[dict]:
+    """Read the agent-service human-feedback JSONL and project to edit-cost rows.
+
+    Mirrors agent-service/app/feedback_store.py without importing it (this script
+    runs standalone). Default path matches the service's AGENT_FEEDBACK_LOG.
+    """
+    import json
+    import os
+
+    p = path or os.getenv(
+        "AGENT_FEEDBACK_LOG",
+        os.path.join(os.path.dirname(__file__), "..", "agent-service", "data", "feedback.jsonl"),
+    )
+    p = os.path.abspath(p)
+    if not os.path.exists(p):
+        return []
+    rows: list[dict] = []
+    with open(p, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(r.get("seconds"), (int, float)):
+                rows.append(
+                    {
+                        "condition": r.get("condition", "human-critic"),
+                        "seconds": float(r["seconds"]),
+                        "regenerations": int(r.get("regenerations", 1)),
+                    }
+                )
+    return rows
+
+
 def _demo() -> None:
     print("== DEMO (synthetic sanity check) ==")
     # brand color: target navy vs a slightly-off render
@@ -208,7 +245,16 @@ def main() -> int:
     ap.add_argument("--image", help="rendered card image to sample text color from")
     ap.add_argument("--region", nargs=4, type=int, metavar=("X0", "Y0", "X1", "Y1"))
     ap.add_argument("--repro", nargs="+", help="2+ identical-spec renders to compare")
+    ap.add_argument("--feedback-log", nargs="?", const="", help="summarize edit cost from the agent-service human-feedback JSONL")
     args = ap.parse_args()
+
+    if args.feedback_log is not None:
+        records = _load_feedback_edit_records(args.feedback_log or None)
+        if not records:
+            print("no human-feedback edit records found [DATA TBD]")
+        else:
+            print("edit cost (from human feedback):", edit_cost_summary(records))
+        return 0
 
     if args.demo or not any([args.hex, args.repro]):
         _demo()

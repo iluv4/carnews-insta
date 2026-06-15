@@ -28,6 +28,7 @@ from .nodes import (
     budgeter,
     copywriter,
     designer,
+    human_critic,
     image_gen,
     planner,
     retriever,
@@ -119,6 +120,45 @@ def render_slide(state: AgentState) -> AgentState:
         "provider": sub.get("provider"),
     }
     return {"cards": [card]}
+
+
+def revise_with_feedback(state: AgentState) -> AgentState:
+    """Human-in-the-loop revision of a single card.
+
+    A person's evaluation (``state['human_feedback']``) is converted to the same
+    critique contract the Art Director produces, fed through the existing
+    ``reviser → designer → image_gen`` path, and the freshly rendered card is then
+    re-scored by the automated critic. Returns a one-card result plus the score
+    before/after, so callers can show (and log) the improvement the human drove.
+    """
+    sub: dict = dict(state)
+    before = sub.get("auto_score_before")
+
+    sub.update(human_critic(sub))   # human → critique {score, fixes}
+    sub.update(reviser(sub))        # fixes → revision_notes (+ bump revision)
+    sub.update(designer(sub))       # re-art-direct with the human's fixes
+    sub.update(image_gen(sub))
+    sub.update(art_director(sub))   # automated re-score of the new render
+
+    slide = (sub.get("copy", {}).get("slides") or [{}])[0]
+    card = {
+        "index": int(sub.get("index", 0)),
+        "role": slide.get("role"),
+        "copy": slide,
+        "image_prompt": sub.get("image_prompt"),
+        "design_brief": sub.get("design_brief", {}),
+        "card_image_b64": sub.get("card_image_b64"),
+        "critique": sub.get("critique", {}),
+        "score": sub.get("score"),
+        "revisions": int(sub.get("revision", 0)),
+        "provider": sub.get("provider"),
+    }
+    return {
+        "card": card,
+        "auto_score_before": before,
+        "auto_score_after": sub.get("score"),
+        "human_score": float((state.get("human_feedback") or {}).get("score", 0.0)),
+    }
 
 
 def collect(state: AgentState) -> AgentState:
