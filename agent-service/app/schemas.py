@@ -38,12 +38,15 @@ class AxisScore(BaseModel):
 
 
 class Critique(BaseModel):
-    """Art-director critique. ``score`` is the weighted aggregate of ``axes``
-    (composition, overlay_space, color_mood, cleanliness, text_free), computed
-    deterministically by ``app.nodes.art_director.aggregate``."""
+    """Art-director critique of the BAKED card. ``score`` is the weighted
+    aggregate of ``axes`` (composition, readability, color_mood, cleanliness,
+    text_quality), computed deterministically by
+    ``app.nodes.art_director.aggregate``. ``garbled`` caps the score when the
+    baked Korean glyphs look broken/misspelled (the OCR gate is the rigorous
+    character-level check; this is the complementary visual gate)."""
     score: float
     axes: dict[str, AxisScore] = Field(default_factory=dict)
-    has_text: bool = False
+    garbled: bool = False
     issues: list[str] = Field(default_factory=list)
     fixes: list[str] = Field(default_factory=list)
 
@@ -99,13 +102,21 @@ class AgentState(TypedDict, total=False):
     # backward-compatible single-card view exposed by `collect`).
     design_brief: dict[str, Any]
     image_prompt: str
+    # The exact strings baked into the card, in reading order (the OCR target).
+    intended_text: list[str]
     card_image_b64: Optional[str]
+    # ocr gate (text-fidelity check on the baked card)
+    ocr_text: str
+    text_score: float
+    text_issues: list[str]
+    # art director critic
     critique: dict[str, Any]
     score: float
     # reviser loop bookkeeping (per render_slide branch)
     revision: int
     max_revisions: int
     threshold: float
+    text_threshold: float
     revision_notes: list[str]
     # human-in-the-loop: a person's critique, injected in place of (or alongside)
     # the Art Director's. Carries the same {score, fixes} contract the reviser reads.

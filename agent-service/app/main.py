@@ -79,6 +79,7 @@ def _initial_state(req: GenerateRequest) -> AgentState:
         "revision_notes": [],
         "max_revisions": s.max_revisions,
         "threshold": s.quality_threshold,
+        "text_threshold": s.text_threshold,
     }
 
 
@@ -113,6 +114,8 @@ async def _stream(req: GenerateRequest) -> AsyncGenerator[str, None]:
             "image_prompt": state.get("image_prompt"),
             "card_image_b64": state.get("card_image_b64"),
             "score": state.get("score"),
+            "text_score": state.get("text_score"),
+            "ocr_text": state.get("ocr_text"),
             "critique": state.get("critique"),
             "revisions": state.get("revision", 0),
             "provider": state.get("provider"),

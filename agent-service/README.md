@@ -20,9 +20,9 @@ planner → budgeter → retriever → copywriter ─┬─▶ render_slide ─�
                                               (one branch per slide, in parallel)
 
 each render_slide branch:
-    designer → image_gen → art_director
-        ▲                       │
-        └──── reviser ◄─────────┘   (loop until score ≥ threshold or revision ceiling)
+    designer → image_gen → ocr_gate → art_director
+        ▲                                  │
+        └─────────── reviser ◄─────────────┘   (loop until BOTH scores clear)
 ```
 
 | Node | Model | Job |
@@ -32,22 +32,27 @@ each render_slide branch:
 | `retriever` | embeddings | **RAG**: top-k similar real templates (pgvector or in-process) |
 | `copywriter` | GPT-5.5 | **Best-of-N self-consistency** copy for every slide, grounded in retrieved exemplars |
 | *(fan-out)* | — | `Send` dispatches one `render_slide` branch per slide, run in parallel |
-| `render_slide` | — | one card end-to-end (designer → image_gen → art_director → reviser loop) |
-| └ `designer` | GPT-5.5 | art-direction prompt for the image model |
-| └ `image_gen` | **gpt-image-2** | text-free background render (Korean text is overlaid by the client, never baked — diffusion garbles Korean glyphs) |
-| └ `art_director` | GPT-5.5 vision | scores the background on a **5-axis weighted rubric** (composition / overlay_space / color_mood / cleanliness / text_free); the overall score is aggregated deterministically in Python so the gate is stable and explainable |
-| └ `reviser` | — | turns critic fixes into next-pass instructions, loops back |
+| `render_slide` | — | one card end-to-end (designer → image_gen → ocr_gate → art_director → reviser loop) |
+| └ `designer` | GPT-5.5 | full-card prompt that **bakes the exact Korean copy into the image** (names the literal strings to render) |
+| └ `image_gen` | **gpt-image-2** | renders the finished card — headline/bullets/footer baked in, not a separate text layer |
+| └ `ocr_gate` | GPT-5.5 vision | transcribes the rendered text and **diffs it against the intended copy** (`difflib`); numbers/dates/URLs are a hard fail. The safety net that makes baking text safe |
+| └ `art_director` | GPT-5.5 vision | scores the finished card on a **5-axis weighted rubric** (composition / readability / color_mood / cleanliness / text_quality); aggregated deterministically in Python so the gate is stable and explainable |
+| └ `reviser` | — | merges the OCR gate's + critic's fixes into next-pass instructions, loops back |
 | `collect` | — | fans the finished cards back in, ordered (deck score = weakest slide) |
 
-Three things are the point here:
+Four things are the point here:
 
-1. The per-card `art_director → reviser → designer` **cycle** — a one-shot
-   generator can't self-correct; each branch re-renders until its card clears
-   the quality bar.
-2. The **fan-out**: `num_slides` slides are rendered as parallel `render_slide`
+1. The per-card `… → ocr_gate → art_director → reviser → designer` **cycle** — a
+   one-shot generator can't self-correct; each branch re-renders until its card
+   clears the quality bar.
+2. **Baked-in text + OCR gate**: the Korean copy is rendered *into* the image (no
+   client overlay, so no double text), and the loop gates on **two** signals —
+   text fidelity (`ocr_gate`) and aesthetics (`art_director`) — re-rendering until
+   both clear their thresholds (`AGENT_TEXT_THRESHOLD`, `AGENT_QUALITY_THRESHOLD`).
+3. The **fan-out**: `num_slides` slides are rendered as parallel `render_slide`
    branches (LangGraph's `Send` map-reduce), so an N-slide deck costs roughly the
    wall-clock time of one card instead of N.
-3. **Test-Time Scaling (no GPU)**: `budgeter` + Best-of-N self-consistency raise
+4. **Test-Time Scaling (no GPU)**: `budgeter` + Best-of-N self-consistency raise
    quality with inference compute alone — and *budget forcing* (S1) spends that
    compute proportional to topic difficulty. See
    [`docs/AGENT_ARCHITECTURE.md`](../docs/AGENT_ARCHITECTURE.md#test-time-scaling-no-gpu)

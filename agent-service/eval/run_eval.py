@@ -68,15 +68,15 @@ def self_test() -> bool:
     full = {k: {"score": 8} for k in RUBRIC_WEIGHTS}
     perfect = {k: {"score": 10} for k in RUBRIC_WEIGHTS}
 
-    check("all axes 8 → 8.0", aggregate(full, has_text=False), 8.0)
-    check("all axes 10 → 10.0", aggregate(perfect, has_text=False), 10.0)
-    check("empty axes → None", aggregate({}, has_text=False), None)
+    check("all axes 8 → 8.0", aggregate(full, garbled=False), 8.0)
+    check("all axes 10 → 10.0", aggregate(perfect, garbled=False), 10.0)
+    check("empty axes → None", aggregate({}, garbled=False), None)
     # Weighting: only composition (w=0.25) present, score 10 → renormalised 10.0
-    check("single axis renormalises", aggregate({"composition": {"score": 10}}, has_text=False), 10.0)
-    # text gate caps an otherwise-perfect image
-    check("has_text caps at gate", aggregate(perfect, has_text=True), TEXT_GATE_CAP)
+    check("single axis renormalises", aggregate({"composition": {"score": 10}}, garbled=False), 10.0)
+    # garbled-text gate caps an otherwise-perfect card
+    check("garbled caps at gate", aggregate(perfect, garbled=True), TEXT_GATE_CAP)
     # bare-number axis accepted and clamped
-    check("bare-number + clamp", aggregate({k: 12 for k in RUBRIC_WEIGHTS}, has_text=False), 10.0)
+    check("bare-number + clamp", aggregate({k: 12 for k in RUBRIC_WEIGHTS}, garbled=False), 10.0)
 
     assert abs(sum(RUBRIC_WEIGHTS.values()) - 1.0) < 1e-9, "weights must sum to 1.0"
     passed = not self_test.failed  # type: ignore[attr-defined]
@@ -123,7 +123,7 @@ def evaluate(cases: list[dict[str, Any]]) -> dict[str, Any]:
             "image": c["image"],
             "score": score,
             "band": band,
-            "has_text": crit.get("has_text", False),
+            "garbled": crit.get("garbled", False),
             "axes": {k: (v.get("score") if isinstance(v, dict) else v) for k, v in (crit.get("axes") or {}).items()},
             "expected": c.get("expected"),
             "match": (c.get("expected") == band) if c.get("expected") else None,
@@ -153,7 +153,7 @@ def _to_markdown(report: dict[str, Any]) -> str:
         f"- band accuracy (vs human labels): **{acc}**",
         f"- mean score: **{s['mean_score']}**",
         "",
-        "| image | score | band | expected | match | text? | top fix |",
+        "| image | score | band | expected | match | garbled? | top fix |",
         "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for r in report["results"]:
@@ -164,7 +164,7 @@ def _to_markdown(report: dict[str, Any]) -> str:
         fix = (r["fixes"][0] if r["fixes"] else "")[:60]
         lines.append(
             f"| {r['image']} | {r['score']} | {r['band']} | {r['expected'] or '—'} | "
-            f"{match} | {'⚠️' if r['has_text'] else '·'} | {fix} |"
+            f"{match} | {'⚠️' if r['garbled'] else '·'} | {fix} |"
         )
     return "\n".join(lines) + "\n"
 

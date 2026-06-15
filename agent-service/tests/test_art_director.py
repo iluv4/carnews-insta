@@ -28,33 +28,33 @@ def test_weights_sum_to_one():
 
 
 def test_uniform_axes_average_to_that_value():
-    assert aggregate(_axes(8), has_text=False) == 8.0
-    assert aggregate(_axes(10), has_text=False) == 10.0
+    assert aggregate(_axes(8), garbled=False) == 8.0
+    assert aggregate(_axes(10), garbled=False) == 10.0
 
 
 def test_empty_axes_returns_none():
-    assert aggregate({}, has_text=False) is None
+    assert aggregate({}, garbled=False) is None
 
 
 def test_partial_axes_renormalise():
     # Only one axis present → its score regardless of its weight.
-    assert aggregate({"composition": {"score": 7}}, has_text=False) == 7.0
+    assert aggregate({"composition": {"score": 7}}, garbled=False) == 7.0
 
 
-def test_text_gate_caps_score():
-    # A visually perfect image still fails the gate if text is baked in.
-    assert aggregate(_axes(10), has_text=True) == TEXT_GATE_CAP
+def test_garbled_gate_caps_score():
+    # A visually pretty card still fails the gate if the baked text is garbled.
+    assert aggregate(_axes(10), garbled=True) == TEXT_GATE_CAP
 
 
 def test_scores_are_clamped():
-    assert aggregate({k: {"score": 99} for k in RUBRIC_WEIGHTS}, has_text=False) == 10.0
-    assert aggregate({k: {"score": -5} for k in RUBRIC_WEIGHTS}, has_text=False) == 0.0
+    assert aggregate({k: {"score": 99} for k in RUBRIC_WEIGHTS}, garbled=False) == 10.0
+    assert aggregate({k: {"score": -5} for k in RUBRIC_WEIGHTS}, garbled=False) == 0.0
 
 
-def test_normalize_injects_remove_text_fix_when_flagged():
-    crit = _normalize({"axes": _axes(9), "has_text": True, "fixes": []})
-    assert crit["has_text"] is True
-    assert any("text" in f.lower() for f in crit["fixes"])
+def test_normalize_injects_rerender_fix_when_garbled():
+    crit = _normalize({"axes": _axes(9), "garbled": True, "fixes": []})
+    assert crit["garbled"] is True
+    assert any("text" in f.lower() or "glyph" in f.lower() for f in crit["fixes"])
     assert crit["score"] == TEXT_GATE_CAP
 
 
