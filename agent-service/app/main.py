@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from .analyze import analyze_reference
 from .config import get_settings
-from .feedback_store import log_feedback, stats as feedback_stats
+from .feedback_store import log_feedback, score_correlation, stats as feedback_stats
 from .graph import build_graph, run_linear, revise_with_feedback, _HAS_LANGGRAPH
 from .rag.store import get_store
 from .schemas import AgentState, AnalyzeRequest, GenerateRequest, ReviseRequest
@@ -219,5 +219,8 @@ def revise(req: ReviseRequest) -> JSONResponse:
 
 @app.get("/feedback/stats")
 def feedback_stats_endpoint() -> JSONResponse:
-    """Aggregate human feedback: counts, mean score, auto-score gain, top templates."""
-    return JSONResponse(feedback_stats())
+    """Aggregate human feedback: counts, mean score, auto-score gain, top templates,
+    and the auto↔human score correlation (does the auto-judge match human eyes?)."""
+    out = feedback_stats()
+    out["auto_vs_human"] = score_correlation()
+    return JSONResponse(out)

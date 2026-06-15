@@ -96,6 +96,61 @@ def edit_cost_records(records: Optional[list[dict]] = None) -> list[dict[str, An
     return out
 
 
+def _pearson(xs: list[float], ys: list[float]) -> Optional[float]:
+    n = len(xs)
+    if n < 2:
+        return None
+    mx = sum(xs) / n
+    my = sum(ys) / n
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    sxx = sum((x - mx) ** 2 for x in xs)
+    syy = sum((y - my) ** 2 for y in ys)
+    denom = (sxx * syy) ** 0.5
+    return (sxy / denom) if denom else None
+
+
+def _rank(vals: list[float]) -> list[float]:
+    """Fractional ranks with ties averaged (for Spearman)."""
+    order = sorted(range(len(vals)), key=lambda i: vals[i])
+    ranks = [0.0] * len(vals)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and vals[order[j + 1]] == vals[order[i]]:
+            j += 1
+        avg = (i + j) / 2 + 1  # 1-based average rank for the tie group
+        for k in range(i, j + 1):
+            ranks[order[k]] = avg
+        i = j + 1
+    return ranks
+
+
+def score_correlation(records: Optional[list[dict]] = None) -> dict[str, Any]:
+    """Agreement between the automated Art Director score and the human score
+    on the *same* card — evidence for whether the auto-judge can stand in for
+    human eyes. Uses auto_score_before (the critic's score of the card the human
+    then judged) vs human_score.
+    """
+    recs = records if records is not None else load_records()
+    pairs = [
+        (float(r["auto_score_before"]), float(r["human_score"]))
+        for r in recs
+        if isinstance(r.get("auto_score_before"), (int, float))
+        and isinstance(r.get("human_score"), (int, float))
+    ]
+    if len(pairs) < 2:
+        return {"n": len(pairs), "pearson": None, "spearman": None, "mean_abs_error": None}
+    auto = [p[0] for p in pairs]
+    human = [p[1] for p in pairs]
+    spearman = _pearson(_rank(auto), _rank(human))
+    return {
+        "n": len(pairs),
+        "pearson": _pearson(auto, human),
+        "spearman": spearman,
+        "mean_abs_error": sum(abs(a - h) for a, h in pairs) / len(pairs),
+    }
+
+
 def stats(records: Optional[list[dict]] = None) -> dict[str, Any]:
     """Summary for the /feedback/stats endpoint."""
     recs = records if records is not None else load_records()

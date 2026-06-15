@@ -213,6 +213,65 @@ def _load_feedback_edit_records(path: Optional[str]) -> list[dict]:
     return rows
 
 
+def _auto_vs_human_correlation(path: Optional[str]) -> dict:
+    """Pearson/Spearman between the Art Director's score and the human's score on
+    the same card — quantifies whether the auto-judge can stand in for human eyes.
+    """
+    import json
+    import os
+
+    p = path or os.getenv(
+        "AGENT_FEEDBACK_LOG",
+        os.path.join(os.path.dirname(__file__), "..", "agent-service", "data", "feedback.jsonl"),
+    )
+    p = os.path.abspath(p)
+    auto: list[float] = []
+    human: list[float] = []
+    if os.path.exists(p):
+        with open(p, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                a, h = r.get("auto_score_before"), r.get("human_score")
+                if isinstance(a, (int, float)) and isinstance(h, (int, float)):
+                    auto.append(float(a))
+                    human.append(float(h))
+    n = len(auto)
+    if n < 2:
+        return {"n": n, "pearson": None, "spearman": None, "mean_abs_error": None}
+    a = np.array(auto)
+    h = np.array(human)
+    pearson = float(np.corrcoef(a, h)[0, 1]) if a.std() and h.std() else None
+    # Spearman = Pearson on ranks (ties averaged via argsort-of-argsort + tie fix).
+    ra = _avg_rank(a)
+    rh = _avg_rank(h)
+    spearman = float(np.corrcoef(ra, rh)[0, 1]) if ra.std() and rh.std() else None
+    return {
+        "n": n,
+        "pearson": pearson,
+        "spearman": spearman,
+        "mean_abs_error": float(np.abs(a - h).mean()),
+    }
+
+
+def _avg_rank(arr: "np.ndarray") -> "np.ndarray":
+    """Ranks with ties averaged."""
+    order = np.argsort(arr, kind="mergesort")
+    ranks = np.empty(len(arr), dtype=float)
+    ranks[order] = np.arange(1, len(arr) + 1, dtype=float)
+    # average tied groups
+    for val in np.unique(arr):
+        mask = arr == val
+        if mask.sum() > 1:
+            ranks[mask] = ranks[mask].mean()
+    return ranks
+
+
 def _demo() -> None:
     print("== DEMO (synthetic sanity check) ==")
     # brand color: target navy vs a slightly-off render
@@ -246,6 +305,7 @@ def main() -> int:
     ap.add_argument("--region", nargs=4, type=int, metavar=("X0", "Y0", "X1", "Y1"))
     ap.add_argument("--repro", nargs="+", help="2+ identical-spec renders to compare")
     ap.add_argument("--feedback-log", nargs="?", const="", help="summarize edit cost from the agent-service human-feedback JSONL")
+    ap.add_argument("--correlation", nargs="?", const="", help="auto (Art Director) vs human score correlation from the feedback JSONL")
     args = ap.parse_args()
 
     if args.feedback_log is not None:
@@ -254,6 +314,18 @@ def main() -> int:
             print("no human-feedback edit records found [DATA TBD]")
         else:
             print("edit cost (from human feedback):", edit_cost_summary(records))
+        return 0
+
+    if args.correlation is not None:
+        corr = _auto_vs_human_correlation(args.correlation or None)
+        if corr["n"] < 2:
+            print(f"need >= 2 records with both scores (have {corr['n']}) [DATA TBD]")
+        else:
+            print("auto (Art Director) vs human:")
+            print(f"  n              = {corr['n']}")
+            print(f"  Pearson  r     = {corr['pearson']:.3f}" if corr["pearson"] is not None else "  Pearson  r     = n/a")
+            print(f"  Spearman rho   = {corr['spearman']:.3f}" if corr["spearman"] is not None else "  Spearman rho   = n/a")
+            print(f"  mean |Δ| (0-10)= {corr['mean_abs_error']:.3f}")
         return 0
 
     if args.demo or not any([args.hex, args.repro]):

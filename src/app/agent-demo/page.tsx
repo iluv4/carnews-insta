@@ -13,10 +13,13 @@ type SlideCard = {
   role?: string;
   copy?: CoverCopy;
   image_prompt?: string;
+  design_brief?: Record<string, unknown>;
   card_image_b64?: string | null;
   score?: number;
   text_score?: number;
 };
+
+type ReviseInfo = { before: number | null; after: number | null; human: number };
 
 type DonePayload = {
   copy?: { slides?: Array<Record<string, unknown>> };
@@ -151,6 +154,146 @@ function CardPreview({
   );
 }
 
+// Star rating (1–5 → 0–10) + comment. Submitting calls /api/agent-revise, which
+// re-renders this one card from the human's feedback and logs it. This is the
+// human-in-the-loop critic: a person's eyes drive the same revision loop the
+// automated Art Director normally does.
+function FeedbackWidget({
+  topic,
+  card,
+  examples,
+  onRevised,
+}: {
+  topic: string;
+  card: SlideCard;
+  examples: Array<{ template_id: string; score: number; summary: string }>;
+  onRevised: (index: number, newCard: SlideCard, info: ReviseInfo) => void;
+}) {
+  const [stars, setStars] = useState(0);
+  const [hover, setHover] = useState(0);
+  const [comment, setComment] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  // When this card first appeared — the human's review/edit time is an edit-cost metric.
+  const [shownAt] = useState(() => Date.now());
+
+  async function submit() {
+    if (!stars || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const cover = (card.copy ?? {}) as CoverCopy;
+      const res = await fetch('/api/agent-revise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic,
+          brand: cover.brand,
+          slide: card.copy ?? {},
+          examples,
+          design_brief: card.design_brief ?? {},
+          image_prompt: card.image_prompt,
+          auto_score_before: card.score ?? null,
+          render_image: true,
+          feedback: {
+            score: stars * 2, // 5 stars → 10
+            notes: comment.trim() ? [comment.trim()] : [],
+            seconds: (Date.now() - shownAt) / 1000,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'revise failed');
+      onRevised(card.index, data.card as SlideCard, {
+        before: data.auto_score_before ?? null,
+        after: data.auto_score_after ?? null,
+        human: data.human_score ?? stars * 2,
+      });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: 8,
+        width: 360,
+        padding: 10,
+        border: '1px solid #eee',
+        borderRadius: 10,
+        background: '#fafafa',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12, color: '#666', fontWeight: 700 }}>내 평가</span>
+        <div role="radiogroup" aria-label="별점" style={{ display: 'flex', gap: 2 }}>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              aria-label={`${n}점`}
+              onClick={() => setStars(n)}
+              onMouseEnter={() => setHover(n)}
+              onMouseLeave={() => setHover(0)}
+              disabled={busy}
+              style={{
+                border: 0,
+                background: 'transparent',
+                cursor: busy ? 'default' : 'pointer',
+                fontSize: 20,
+                lineHeight: 1,
+                padding: 0,
+                color: (hover || stars) >= n ? '#f59e0b' : '#d1d5db',
+              }}
+            >
+              ★
+            </button>
+          ))}
+        </div>
+        {stars > 0 && <span style={{ fontSize: 12, color: '#888' }}>{stars * 2}/10</span>}
+      </div>
+      <textarea
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        placeholder="고칠 점을 적어주세요 (예: 글자를 더 키우고 대비를 높여줘)"
+        disabled={busy}
+        rows={2}
+        style={{
+          width: '100%',
+          marginTop: 8,
+          padding: 8,
+          border: '1px solid #ddd',
+          borderRadius: 8,
+          fontSize: 13,
+          resize: 'vertical',
+          boxSizing: 'border-box',
+        }}
+      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+        <button
+          onClick={submit}
+          disabled={!stars || busy}
+          style={{
+            padding: '7px 14px',
+            borderRadius: 8,
+            border: 0,
+            background: !stars || busy ? '#999' : '#111',
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: !stars || busy ? 'default' : 'pointer',
+          }}
+        >
+          {busy ? '반영 중…' : '피드백 반영 → 재생성'}
+        </button>
+        {err && <span style={{ color: '#c00', fontSize: 12 }}>⚠️ {err}</span>}
+      </div>
+    </div>
+  );
+}
+
 type AgentHealth = {
   ok: boolean;
   embedding: 'active' | 'lexical-fallback' | 'unknown';
@@ -250,6 +393,15 @@ export default function AgentDemoPage() {
   const [events, setEvents] = useState<NodeEvent[]>([]);
   const [done, setDone] = useState<DonePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Human-in-the-loop revisions, keyed by slide index: the regenerated card and
+  // the auto-score before/after so the human-driven improvement is visible.
+  const [revised, setRevised] = useState<Record<number, SlideCard>>({});
+  const [revInfo, setRevInfo] = useState<Record<number, ReviseInfo>>({});
+
+  function applyRevision(index: number, newCard: SlideCard, info: ReviseInfo) {
+    setRevised((prev) => ({ ...prev, [index]: { ...newCard, index } }));
+    setRevInfo((prev) => ({ ...prev, [index]: info }));
+  }
 
   // 프롬프트 다듬기 상태: 선택한 페르소나, 다듬는 중 여부, 변경 설명, 되돌리기용 원본.
   const [personaId, setPersonaId] = useState(PERSONAS[0].id);
@@ -291,6 +443,8 @@ export default function AgentDemoPage() {
     setEvents([]);
     setDone(null);
     setError(null);
+    setRevised({});
+    setRevInfo({});
     try {
       const res = await fetch('/api/agent-generate', {
         method: 'POST',
@@ -490,10 +644,12 @@ export default function AgentDemoPage() {
               is the fan-out result: one rendered card per slide. */}
           {done.cards && done.cards.length > 0 ? (
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
-              {done.cards.map((card) => {
+              {done.cards.map((orig) => {
+                const card = revised[orig.index] ?? orig;
                 const cover = (card.copy ?? {}) as CoverCopy;
+                const info = revInfo[orig.index];
                 return (
-                  <figure key={card.index} style={{ margin: 0 }}>
+                  <figure key={orig.index} style={{ margin: 0 }}>
                     <CardPreview
                       imageB64={card.card_image_b64 ?? null}
                       cover={cover}
@@ -504,7 +660,19 @@ export default function AgentDemoPage() {
                       {card.role ? ` · ${card.role}` : ''}
                       {typeof card.score === 'number' ? ` · 점수 ${card.score}` : ''}
                       {typeof card.text_score === 'number' ? ` · 글자 ${card.text_score}` : ''}
+                      {info && (
+                        <span style={{ color: '#16a34a', fontWeight: 700 }}>
+                          {' '}· 내 평가 {info.human}/10 반영 (자동 {info.before ?? '—'} →{' '}
+                          {info.after ?? '—'})
+                        </span>
+                      )}
                     </figcaption>
+                    <FeedbackWidget
+                      topic={topic}
+                      card={card}
+                      examples={done.examples ?? []}
+                      onRevised={applyRevision}
+                    />
                   </figure>
                 );
               })}
