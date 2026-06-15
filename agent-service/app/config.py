@@ -49,6 +49,28 @@ class Settings(BaseModel):
     quality_threshold: float = float(os.getenv("AGENT_QUALITY_THRESHOLD", "8.0"))
     max_revisions: int = int(os.getenv("AGENT_MAX_REVISIONS", "2"))
 
+    # --- Test-Time Scaling (TTS) ---
+    # These spend *inference* compute (not training / GPU) to raise quality:
+    # Best-of-N self-consistency on the copy + S1-style "budget forcing" that
+    # scales that compute by topic difficulty. See app/tts.py.
+    tts_enabled: bool = os.getenv("AGENT_TTS_ENABLED", "true").lower() not in {
+        "0",
+        "false",
+        "no",
+    }
+    # Best-of-N copy candidates. The budgeter picks the *actual* N per request
+    # between min and max by difficulty (min for easy, max for hard).
+    tts_max_samples: int = int(os.getenv("AGENT_TTS_MAX_SAMPLES", "4"))
+    tts_min_samples: int = int(os.getenv("AGENT_TTS_MIN_SAMPLES", "1"))
+    # Sampling temperature for candidate diversity (applied to non-reasoning
+    # models only; reasoning models vary across calls on their own).
+    tts_temperature: float = float(os.getenv("AGENT_TTS_TEMPERATURE", "0.9"))
+    # Budget forcing: the revision ceiling the budgeter may scale up to for hard
+    # topics. max_revisions stays the floor for easy ones.
+    tts_max_revisions_ceiling: int = int(
+        os.getenv("AGENT_TTS_MAX_REVISIONS_CEILING", "4")
+    )
+
     @property
     def has_openai(self) -> bool:
         k = self.openai_api_key
