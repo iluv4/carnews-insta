@@ -35,7 +35,7 @@ each render_slide branch:
 | `render_slide` | — | one card end-to-end (designer → image_gen → art_director → reviser loop) |
 | └ `designer` | GPT-5.5 | art-direction prompt for the image model |
 | └ `image_gen` | **gpt-image-2** | text-free background render (Korean text is overlaid by the client, never baked — diffusion garbles Korean glyphs) |
-| └ `art_director` | GPT-5.5 vision | scores the background against a rubric (penalises any stray text) |
+| └ `art_director` | GPT-5.5 vision | scores the background on a **5-axis weighted rubric** (composition / overlay_space / color_mood / cleanliness / text_free); the overall score is aggregated deterministically in Python so the gate is stable and explainable |
 | └ `reviser` | — | turns critic fixes into next-pass instructions, loops back |
 | `collect` | — | fans the finished cards back in, ordered (deck score = weakest slide) |
 
@@ -74,6 +74,21 @@ RAG), so `GET /healthz`, `GET /rag/info`, and `POST /generate` all work in dev.
   once per slide) → `done`. The `done` payload carries `cards` — the full deck,
   one rendered background per slide — plus a cover-based single-card view
   (`card_image_b64`, `score`, …) kept for backward compatibility.
+- `POST /analyze` — `{ "image" }` (base64 / data URL) → reads the **Korean text**
+  (OCR) and describes the **layout** of a reference card as structured JSON
+  (`text_blocks`, `layout`, `summary`). A *perception* task, so it runs on
+  GPT-5.5 by default but **flips to Qwen3-VL** (or any OpenAI-compatible VLM)
+  by setting `AGENT_ANALYZE_MODEL` / `AGENT_ANALYZE_BASE_URL` / `AGENT_ANALYZE_API_KEY`
+  — no GPU on your side, so Railway stays CPU-only.
+
+## Eval
+
+A small harness scores the Art Director critic — see [`eval/`](eval/README.md):
+
+```bash
+python eval/run_eval.py --self-test                              # deterministic, no key (CI)
+python eval/run_eval.py --cases eval/cases.sample.jsonl --out eval/report.md   # real images
+```
 
 ## Tests
 
