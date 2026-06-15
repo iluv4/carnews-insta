@@ -5,18 +5,26 @@
                                                  └─▶ render_slide ─┘
                                                   (one branch per slide, in parallel)
 
+    render_slide:  designer → image_gen → ocr_gate → art_director
+                       ▲                                  │
+                       └──────────── reviser ◄────────────┘   (loop)
+
 `budgeter` applies Test-Time Scaling "budget forcing": it estimates the topic's
 difficulty and sets the inference budget (Best-of-N sample count + revision
 ceiling) for the rest of the run. `copywriter` then samples that many candidates
 and keeps the best (self-consistency), and a **fan-out** dispatches one
 `render_slide` branch per slide via LangGraph's `Send` API. Each branch runs the
-full designer → image_gen → art_director → reviser self-correction loop for its
-own card, independently and in parallel, so an N-slide deck costs roughly the
-wall-clock time of a single card. `collect` fans the finished cards back in
-(ordered) once every branch is done.
+full designer → image_gen → ocr_gate → art_director → reviser self-correction
+loop for its own card, independently and in parallel, so an N-slide deck costs
+roughly the wall-clock time of a single card. `collect` fans the finished cards
+back in (ordered) once every branch is done.
 
-The per-card critique→revision cycle inside `render_slide` is still the point — a
-real stateful loop, exactly what LangGraph is for — we now just run one per slide.
+Because the Korean copy is BAKED into the image, each render_slide loop gates on
+TWO signals: the ``ocr_gate`` node's text-fidelity score (did the glyphs render
+correctly?) and the ``art_director``'s aesthetic score. Either falling short
+sends the card back for a re-render. The per-card critique→revision cycle is the
+point — a real stateful loop, exactly what LangGraph is for — run once per slide.
+
 """
 from __future__ import annotations
 
@@ -30,6 +38,7 @@ from .nodes import (
     designer,
     human_critic,
     image_gen,
+    ocr_gate,
     planner,
     retriever,
     reviser,
@@ -57,11 +66,16 @@ except Exception:  # pragma: no cover - allows import without the dep installed
 
 
 def _route_after_critic(state: AgentState) -> Literal["reviser", "done"]:
+    s = get_settings()
     score = float(state.get("score", 0))
+    text_score = float(state.get("text_score", s.text_threshold))
     revision = int(state.get("revision", 0))
-    threshold = float(state.get("threshold", get_settings().quality_threshold))
-    max_rev = int(state.get("max_revisions", get_settings().max_revisions))
-    if score < threshold and revision < max_rev:
+    threshold = float(state.get("threshold", s.quality_threshold))
+    text_threshold = float(state.get("text_threshold", s.text_threshold))
+    max_rev = int(state.get("max_revisions", s.max_revisions))
+    # Re-render if the card fails EITHER the aesthetic bar or the baked-text bar.
+    below_bar = score < threshold or text_score < text_threshold
+    if below_bar and revision < max_rev:
         return "reviser"
     return "done"
 
@@ -85,6 +99,7 @@ def _slide_seed(state: AgentState, index: int, slide: dict) -> AgentState:
         "revision": 0,
         "revision_notes": [],
         "threshold": float(state.get("threshold", s.quality_threshold)),
+        "text_threshold": float(state.get("text_threshold", s.text_threshold)),
         "max_revisions": int(state.get("max_revisions", s.max_revisions)),
     }
 
@@ -99,11 +114,13 @@ def render_slide(state: AgentState) -> AgentState:
     sub: dict = dict(state)
     sub.update(designer(sub))
     sub.update(image_gen(sub))
+    sub.update(ocr_gate(sub))  # baked-text fidelity check before aesthetics
     sub.update(art_director(sub))
     while _route_after_critic(sub) == "reviser":
         sub.update(reviser(sub))
-        sub.update(designer(sub))  # re-art-direct with the critic's fixes
+        sub.update(designer(sub))  # re-art-direct with the critic's + OCR fixes
         sub.update(image_gen(sub))
+        sub.update(ocr_gate(sub))
         sub.update(art_director(sub))
 
     slide = (sub.get("copy", {}).get("slides") or [{}])[0]
@@ -114,6 +131,9 @@ def render_slide(state: AgentState) -> AgentState:
         "image_prompt": sub.get("image_prompt"),
         "design_brief": sub.get("design_brief", {}),
         "card_image_b64": sub.get("card_image_b64"),
+        "intended_text": sub.get("intended_text", []),
+        "ocr_text": sub.get("ocr_text", ""),
+        "text_score": sub.get("text_score"),
         "critique": sub.get("critique", {}),
         "score": sub.get("score"),
         "revisions": int(sub.get("revision", 0)),
@@ -176,6 +196,9 @@ def collect(state: AgentState) -> AgentState:
         "card_image_b64": cover.get("card_image_b64"),
         "image_prompt": cover.get("image_prompt"),
         "design_brief": cover.get("design_brief", {}),
+        "intended_text": cover.get("intended_text", []),
+        "ocr_text": cover.get("ocr_text", ""),
+        "text_score": cover.get("text_score"),
         "critique": cover.get("critique", {}),
         "score": min(scores) if scores else None,
         "revision": max((int(c.get("revisions", 0)) for c in cards), default=0),
@@ -203,7 +226,6 @@ def build_graph():
     g.add_edge(START, "planner")
     g.add_edge("planner", "budgeter")
     g.add_edge("budgeter", "retriever")
-    g.add_edge("retriever", "copywriter")
     g.add_conditional_edges("copywriter", _dispatch, ["render_slide"])
     g.add_edge("render_slide", "collect")
     g.add_edge("collect", END)

@@ -78,6 +78,12 @@ class Settings(BaseModel):
     # keep total latency inside the route timeout; raise it with an async
     # pipeline.
     max_revisions: int = int(os.getenv("AGENT_MAX_REVISIONS", "1"))
+    # Because we now BAKE the Korean copy into the image, "did the text render
+    # correctly?" is its own gate. The ocr_gate node transcribes the rendered
+    # card and diffs it against the intended copy; a card below this fidelity
+    # threshold (0–10) loops back for a re-render even if it's visually pretty.
+    # Set high — for baked text, "almost right" spelling is a publish blocker.
+    text_threshold: float = float(os.getenv("AGENT_TEXT_THRESHOLD", "9.0"))
 
     # --- Test-Time Scaling (TTS) ---
     # These spend *inference* compute (not training / GPU) to raise quality:

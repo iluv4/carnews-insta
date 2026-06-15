@@ -43,6 +43,18 @@ def test_pipeline_runs_all_nodes():
     assert 0.0 <= state["difficulty"] <= 1.0
     # Best-of-N selected a candidate and recorded how many it scored.
     assert state["copy_candidates"] == state["n_samples"]
+    # Baked-text pivot: the designer names the exact strings to render and the
+    # ocr_gate exposes a text-fidelity score (surfaced on the cover by collect).
+    assert state["intended_text"]
+    assert "text_score" in state
+
+
+def test_ocr_gate_diffs_against_intended_text():
+    from app.nodes.ocr_gate import ocr_gate
+
+    # No image / no key → fails open (doesn't block the loop).
+    out = ocr_gate({"intended_text": ["제주도 흑돼지"], "card_image_b64": None})
+    assert out["text_score"] >= 9.0
 
 
 def test_self_consistency_picks_highest_reward():
