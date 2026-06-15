@@ -33,32 +33,36 @@ planner → retriever → copywriter → designer → image_gen → ocr_gate →
 ```
 
 1. **planner** (GPT-5.5) — decomposes the topic into per-slide roles + intent.
-2. **retriever** (RAG) — embeds the topic and pulls the top-k most similar of
+2. **budgeter** (Test-Time Scaling) — estimates the topic's difficulty and forces
+   the per-request inference budget (Best-of-N sample count + revision ceiling).
+   See [Test-Time Scaling](#test-time-scaling-no-gpu) below.
+3. **retriever** (RAG) — embeds the topic and pulls the top-k most similar of
    the 45 real saved templates. This is genuine retrieval: we ground generation
    in human-made designs, not the model's prior. Backed by **pgvector** when
    `DATABASE_URL` is set, otherwise an in-process numpy index, otherwise a
    lexical (token + CJK-bigram) fallback so dev works with no key.
-3. **copywriter** (GPT-5.5) — writes slide copy conditioned on the retrieved
-   exemplars' tone.
-4. **designer** (GPT-5.5) — composes the full-card image prompt that **bakes the
+4. **copywriter** (GPT-5.5) — writes slide copy conditioned on the retrieved
+   exemplars' tone. Runs **Best-of-N self-consistency**: samples `n_samples`
+   candidates (the budget forced above), scores each with a reward judge, keeps
+   the best.
+5. **designer** (GPT-5.5) — composes the full-card image prompt that **bakes the
    exact Korean copy into the image**, naming the literal strings to render and
    folding in any revision notes from a previous loop.
-5. **image_gen** (**gpt-image-2**) — full-card render. Text is baked into the
+6. **image_gen** (**gpt-image-2**) — full-card render. Text is baked into the
    image (the chosen design — "박기 올인"), using the 2026 model's multilingual
    text rendering. The output is a publishable card, not an editable draft.
-6. **ocr_gate** (GPT-5.5 vision + `difflib`) — the text-fidelity safety net that
+7. **ocr_gate** (GPT-5.5 vision + `difflib`) — the text-fidelity safety net that
    makes baking text safe. It transcribes the text actually visible in the card
    (OCR, no guessing) and diffs it against the intended copy for a 0–10
    `text_score`. Numbers/dates/URLs must match character-for-character (one wrong
    digit caps the score). A low score loops back for a re-render.
-7. **art_director** (GPT-5.5 vision) — scores the finished card against a rubric
-   (baked-text correctness/legibility, contrast, hierarchy, palette/mood,
-   artifacts) and lists concrete fixes. It now *requires* the baked text instead
-   of penalising it.
-8. **reviser** — merges the OCR gate's + critic's fixes into instructions and
+8. **art_director** (GPT-5.5 vision) — scores the finished card against a rubric
+   (composition, readability, color/mood, cleanliness, text quality) and lists
+   concrete fixes. It now *requires* the baked text instead of penalising it.
+9. **reviser** — merges the OCR gate's + critic's fixes into instructions and
    **loops back** to the designer. Repeats until **both** scores clear their
-   thresholds (`AGENT_TEXT_THRESHOLD`, `AGENT_QUALITY_THRESHOLD`) or
-   `AGENT_MAX_REVISIONS` is hit.
+   thresholds (`AGENT_TEXT_THRESHOLD`, `AGENT_QUALITY_THRESHOLD`) or the budget's
+   revision ceiling (`AGENT_MAX_REVISIONS`) is hit.
 
 ### Why this isn't a glorified prompt chain
 
@@ -90,6 +94,38 @@ The handoff design framed quality as a 3-layer CV problem. Where we are:
 > without it, a lenient `art_director` silently passes bad cards and you'd never
 > know. It's the difference between "we have a critic" and "we know our critic is
 > calibrated."
+
+## Test-Time Scaling (no GPU)
+
+Quality is raised with **inference** compute only — no fine-tuning, no GPU, no
+extra training data. Two techniques from the test-time-scaling literature, in
+`agent-service/app/tts.py`:
+
+- **Best-of-N self-consistency** (`copywriter`). A single greedy decode is high
+  variance: one draft can fumble the hook. Instead we sample N copy candidates
+  (candidate 0 greedy, the rest at temperature for diversity), score each with a
+  reward judge (`score_copy` — an LLM editor, or a deterministic heuristic with
+  no key), and keep the best. More samples → more reliably good copy.
+- **Budget forcing — S1** (`budgeter`). Spending a flat N on every request wastes
+  compute on easy topics and starves hard ones. The budgeter estimates topic
+  difficulty (0..1) and maps it to a budget: easy → 1 sample + the default
+  revision cap; hard → up to `AGENT_TTS_MAX_SAMPLES` + a higher revision ceiling.
+  That budget flows into the copywriter (N) and every `render_slide` critique
+  loop (revision ceiling).
+
+This is the project's analogue of pushing a small model toward frontier
+reasoning *without* training it — the "Method 01" path for teams with no GPU.
+
+| Knob | Default | Env |
+|------|---------|-----|
+| TTS on/off | `true` | `AGENT_TTS_ENABLED` |
+| Best-of-N range | `1`–`4` | `AGENT_TTS_MIN_SAMPLES` / `AGENT_TTS_MAX_SAMPLES` |
+| Candidate temperature | `0.9` | `AGENT_TTS_TEMPERATURE` |
+| Revision ceiling (hard topics) | `4` | `AGENT_TTS_MAX_REVISIONS_CEILING` |
+
+The `/healthz` response reports the active TTS config, and every `/generate`
+`done` event carries a `tts` block (difficulty, candidates scored, chosen
+reward, full budget) for observability.
 
 ## Models (2026-06)
 

@@ -1,19 +1,30 @@
 """LangGraph wiring.
 
-    planner → retriever → copywriter → designer → image_gen → ocr_gate → art_director
-                                          ▲                                     │
-                                          └────────────── reviser ◄─────────────┘   (loop)
-                                                             │
-                                                            END  (score ok / max revisions)
+    planner → budgeter → retriever → copywriter ─┬─▶ render_slide ─┐
+                                                 ├─▶ render_slide ─┼─▶ collect ─▶ END
+                                                 └─▶ render_slide ─┘
+                                                  (one branch per slide, in parallel)
 
-The cycle (art_director → reviser → designer → …) is the whole point: a real
-stateful graph with a feedback loop, which is exactly what LangGraph is for and
-what a plain forward-pass pipeline can't express cleanly.
+    render_slide:  designer → image_gen → ocr_gate → art_director
+                       ▲                                  │
+                       └──────────── reviser ◄────────────┘   (loop)
 
-Because the Korean copy is baked into the image, the loop now gates on TWO
-signals: the ``ocr_gate`` node's text-fidelity score (did the glyphs render
+`budgeter` applies Test-Time Scaling "budget forcing": it estimates the topic's
+difficulty and sets the inference budget (Best-of-N sample count + revision
+ceiling) for the rest of the run. `copywriter` then samples that many candidates
+and keeps the best (self-consistency), and a **fan-out** dispatches one
+`render_slide` branch per slide via LangGraph's `Send` API. Each branch runs the
+full designer → image_gen → ocr_gate → art_director → reviser self-correction
+loop for its own card, independently and in parallel, so an N-slide deck costs
+roughly the wall-clock time of a single card. `collect` fans the finished cards
+back in (ordered) once every branch is done.
+
+Because the Korean copy is BAKED into the image, each render_slide loop gates on
+TWO signals: the ``ocr_gate`` node's text-fidelity score (did the glyphs render
 correctly?) and the ``art_director``'s aesthetic score. Either falling short
-sends the card back for a re-render.
+sends the card back for a re-render. The per-card critique→revision cycle is the
+point — a real stateful loop, exactly what LangGraph is for — run once per slide.
+
 """
 from __future__ import annotations
 
@@ -22,6 +33,7 @@ from typing import Literal
 from .config import get_settings
 from .nodes import (
     art_director,
+    budgeter,
     copywriter,
     designer,
     image_gen,
@@ -34,9 +46,22 @@ from .schemas import AgentState
 
 try:
     from langgraph.graph import END, START, StateGraph
+
+    try:  # Send moved across minor versions; support both.
+        from langgraph.types import Send
+    except Exception:  # pragma: no cover
+        from langgraph.constants import Send
+
+    try:  # InMemoryCache + allowed_objects landed in langgraph >=0.2.x
+        from langgraph.cache.memory import InMemoryCache
+        _cache = InMemoryCache(allowed_objects="messages")
+    except Exception:  # pragma: no cover - older builds without cache API
+        _cache = None
+
     _HAS_LANGGRAPH = True
 except Exception:  # pragma: no cover - allows import without the dep installed
     _HAS_LANGGRAPH = False
+    _cache = None
 
 
 def _route_after_critic(state: AgentState) -> Literal["reviser", "done"]:
@@ -54,54 +79,145 @@ def _route_after_critic(state: AgentState) -> Literal["reviser", "done"]:
     return "done"
 
 
+def _slide_seed(state: AgentState, index: int, slide: dict) -> AgentState:
+    """Build the isolated working state handed to one render_slide branch.
+
+    Each branch sees only its single slide (as the cover of a 1-slide `copy`), so
+    the existing designer/critic nodes operate on it unchanged, plus the shared
+    grounding (retrieved examples, brand) and a fresh revision counter.
+    """
+    s = get_settings()
+    return {
+        "index": index,
+        "topic": state.get("topic", ""),
+        "brand": state.get("brand"),
+        "audience": state.get("audience"),
+        "examples": state.get("examples", []),
+        "copy": {"slides": [slide]},
+        "render_image": state.get("render_image", True),
+        "revision": 0,
+        "revision_notes": [],
+        "threshold": float(state.get("threshold", s.quality_threshold)),
+        "text_threshold": float(state.get("text_threshold", s.text_threshold)),
+        "max_revisions": int(state.get("max_revisions", s.max_revisions)),
+    }
+
+
+def render_slide(state: AgentState) -> AgentState:
+    """One slide, start to finish: art-direct → render → critique → revise loop.
+
+    Reuses the existing single-card nodes against this branch's local state and
+    returns a one-item `cards` list, which the graph reducer concatenates with
+    the other parallel branches.
+    """
+    sub: dict = dict(state)
+    sub.update(designer(sub))
+    sub.update(image_gen(sub))
+    sub.update(ocr_gate(sub))  # baked-text fidelity check before aesthetics
+    sub.update(art_director(sub))
+    while _route_after_critic(sub) == "reviser":
+        sub.update(reviser(sub))
+        sub.update(designer(sub))  # re-art-direct with the critic's + OCR fixes
+        sub.update(image_gen(sub))
+        sub.update(ocr_gate(sub))
+        sub.update(art_director(sub))
+
+    slide = (sub.get("copy", {}).get("slides") or [{}])[0]
+    card = {
+        "index": int(sub.get("index", 0)),
+        "role": slide.get("role"),
+        "copy": slide,
+        "image_prompt": sub.get("image_prompt"),
+        "design_brief": sub.get("design_brief", {}),
+        "card_image_b64": sub.get("card_image_b64"),
+        "intended_text": sub.get("intended_text", []),
+        "ocr_text": sub.get("ocr_text", ""),
+        "text_score": sub.get("text_score"),
+        "critique": sub.get("critique", {}),
+        "score": sub.get("score"),
+        "revisions": int(sub.get("revision", 0)),
+        "provider": sub.get("provider"),
+    }
+    return {"cards": [card]}
+
+
+def collect(state: AgentState) -> AgentState:
+    """Fan-in: order the finished cards and expose a cover-based single-card view.
+
+    The cover (slide 0) fields mirror the old single-card response shape for
+    backward compatibility, while `final_cards` carries the whole deck. The deck
+    score is the *weakest* card, since a deck is only as strong as its worst slide.
+    """
+    cards = sorted(state.get("cards", []), key=lambda c: c.get("index", 0))
+    cover = cards[0] if cards else {}
+    scores = [c["score"] for c in cards if isinstance(c.get("score"), (int, float))]
+    return {
+        "final_cards": cards,
+        "card_image_b64": cover.get("card_image_b64"),
+        "image_prompt": cover.get("image_prompt"),
+        "design_brief": cover.get("design_brief", {}),
+        "intended_text": cover.get("intended_text", []),
+        "ocr_text": cover.get("ocr_text", ""),
+        "text_score": cover.get("text_score"),
+        "critique": cover.get("critique", {}),
+        "score": min(scores) if scores else None,
+        "revision": max((int(c.get("revisions", 0)) for c in cards), default=0),
+        "provider": cover.get("provider"),
+    }
+
+
+def _dispatch(state: AgentState):
+    """Conditional edge → one Send per slide (the fan-out)."""
+    slides = (state.get("copy", {}) or {}).get("slides") or []
+    return [Send("render_slide", _slide_seed(state, i, s)) for i, s in enumerate(slides)]
+
+
 def build_graph():
     if not _HAS_LANGGRAPH:
         raise RuntimeError("langgraph is not installed")
     g = StateGraph(AgentState)
     g.add_node("planner", planner)
+    g.add_node("budgeter", budgeter)
     g.add_node("retriever", retriever)
     g.add_node("copywriter", copywriter)
-    g.add_node("designer", designer)
-    g.add_node("image_gen", image_gen)
-    g.add_node("ocr_gate", ocr_gate)
-    g.add_node("art_director", art_director)
-    g.add_node("reviser", reviser)
+    g.add_node("render_slide", render_slide)
+    g.add_node("collect", collect)
 
     g.add_edge(START, "planner")
-    g.add_edge("planner", "retriever")
-    g.add_edge("retriever", "copywriter")
-    g.add_edge("copywriter", "designer")
-    g.add_edge("designer", "image_gen")
-    g.add_edge("image_gen", "ocr_gate")
-    g.add_edge("ocr_gate", "art_director")
-    g.add_conditional_edges(
-        "art_director",
-        _route_after_critic,
-        {"reviser": "reviser", "done": END},
-    )
-    g.add_edge("reviser", "designer")  # loop back with revision notes
-    return g.compile()
-
-
-# Ordered node sequence used by the linear fallback runner (no langgraph).
-_LINEAR = [planner, retriever, copywriter, designer, image_gen, ocr_gate, art_director]
+    g.add_edge("planner", "budgeter")
+    g.add_edge("budgeter", "retriever")
+    g.add_conditional_edges("copywriter", _dispatch, ["render_slide"])
+    g.add_edge("render_slide", "collect")
+    g.add_edge("collect", END)
+    return g.compile(cache=_cache)
 
 
 def run_linear(state: AgentState):
     """Dependency-free executor that yields (node_name, partial_state).
 
-    Mirrors the graph (including the critic→reviser loop) so the service works
-    even before `pip install langgraph`, and so tests can assert node order.
+    Mirrors the graph — including the per-slide critic→reviser loop and the
+    fan-out/fan-in — but runs the slides sequentially, so the service works even
+    before `pip install langgraph` and tests can assert node order offline.
     """
-    funcs = {f.__name__: f for f in _LINEAR + [reviser]}
-    seq = ["planner", "retriever", "copywriter", "designer", "image_gen", "ocr_gate", "art_director"]
-    for name in seq:
-        partial = funcs[name](state)
+    head = {
+        "planner": planner,
+        "budgeter": budgeter,
+        "retriever": retriever,
+        "copywriter": copywriter,
+    }
+    for name in ["planner", "budgeter", "retriever", "copywriter"]:
+        partial = head[name](state)
         state.update(partial)
         yield name, partial
-    # critique loop
-    while _route_after_critic(state) == "reviser":
-        for name in ["reviser", "designer", "image_gen", "ocr_gate", "art_director"]:
-            partial = funcs[name](state)
-            state.update(partial)
-            yield name, partial
+
+    slides = (state.get("copy", {}) or {}).get("slides") or []
+    cards: list[dict] = []
+    for i, slide in enumerate(slides):
+        partial = render_slide(_slide_seed(state, i, slide))
+        cards.extend(partial["cards"])
+        yield "render_slide", partial
+
+    state["cards"] = cards
+    partial = collect(state)
+    state.update(partial)
+    yield "collect", partial

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PERSONAS } from '@/lib/prompts';
 
 // Self-contained demo of the RAG + multi-agent pipeline. Streams Server-Sent
@@ -8,9 +8,21 @@ import { PERSONAS } from '@/lib/prompts';
 // service) and shows each graph node firing in real time, then the final card.
 type NodeEvent = { node: string; update: Record<string, unknown> };
 
+type SlideCard = {
+  index: number;
+  role?: string;
+  copy?: CoverCopy;
+  image_prompt?: string;
+  card_image_b64?: string | null;
+  score?: number;
+  text_score?: number;
+};
+
 type DonePayload = {
   copy?: { slides?: Array<Record<string, unknown>> };
   examples?: Array<{ template_id: string; score: number; summary: string }>;
+  // The full deck — one rendered background per slide (fan-out result).
+  cards?: SlideCard[];
   image_prompt?: string;
   card_image_b64?: string | null;
   score?: number;
@@ -139,6 +151,87 @@ function CardPreview({
   );
 }
 
+type AgentHealth = {
+  ok: boolean;
+  embedding: 'active' | 'lexical-fallback' | 'unknown';
+  openai?: boolean | null;
+  templates_indexed?: number | null;
+  embedded?: number | null;
+  agent_url?: string;
+  error?: string;
+};
+
+// Live "is embedding actually on?" indicator — polls /api/agent-health (which
+// proxies the agent-service /rag/info) so the deployment's real state is visible
+// at a glance instead of having to curl the Python service directly.
+function EmbeddingStatus() {
+  const [health, setHealth] = useState<AgentHealth | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/agent-health', { cache: 'no-store' });
+        const data = (await res.json()) as AgentHealth;
+        if (alive) setHealth(data);
+      } catch {
+        if (alive) setHealth({ ok: false, embedding: 'unknown', error: 'fetch failed' });
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const tone =
+    loading || !health
+      ? { dot: '#999', bg: '#f3f4f6', fg: '#555', label: '임베딩 상태 확인 중…' }
+      : health.embedding === 'active'
+        ? {
+            dot: '#16a34a',
+            bg: '#ecfdf5',
+            fg: '#065f46',
+            label: `임베딩 ON · ${health.embedded ?? 0}/${health.templates_indexed ?? 0} 벡터`,
+          }
+        : health.embedding === 'lexical-fallback'
+          ? {
+              dot: '#f59e0b',
+              bg: '#fffbeb',
+              fg: '#92400e',
+              label: `임베딩 OFF · 렉시컬 폴백 (${health.templates_indexed ?? 0} 템플릿)`,
+            }
+          : { dot: '#dc2626', bg: '#fef2f2', fg: '#991b1b', label: 'agent-service 연결 안 됨' };
+
+  return (
+    <span
+      title={
+        health
+          ? `embedding=${health.embedding} · openai=${String(health.openai)} · ${health.agent_url ?? ''}${health.error ? ` · ${health.error}` : ''}`
+          : undefined
+      }
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 12px',
+        borderRadius: 999,
+        background: tone.bg,
+        color: tone.fg,
+        fontSize: 13,
+        fontWeight: 600,
+      }}
+    >
+      <span
+        style={{ width: 9, height: 9, borderRadius: '50%', background: tone.dot, flexShrink: 0 }}
+      />
+      {tone.label}
+    </span>
+  );
+}
+
 const NODE_LABEL: Record<string, string> = {
   planner: '🧭 Planner — 슬라이드 구성',
   retriever: '🔎 Retriever — RAG 검색',
@@ -247,6 +340,10 @@ export default function AgentDemoPage() {
         <br />
         <span style={{ fontSize: 12 }}>※ 한국어 텍스트를 이미지에 직접 굽고(박기), OCR 게이트가 글자 정확도를 검증해 통과할 때까지 재생성</span>
       </p>
+
+      <div style={{ marginTop: 12 }}>
+        <EmbeddingStatus />
+      </div>
 
       {/* 페르소나(역할) 선택 — 누르면 다듬기 단계에서 해당 역할이 자동 부여된다. */}
       <div style={{ marginTop: 16 }}>
@@ -387,13 +484,38 @@ export default function AgentDemoPage() {
             </details>
           )}
 
-          {/* Baked card: the Korean text is rendered INTO the image and the
-              OCR gate has verified it. We display the finished pixels as-is. */}
-          <CardPreview
-            imageB64={done.card_image_b64 ?? null}
-            cover={(done.copy?.slides?.[0] ?? {}) as CoverCopy}
-            brand={(done.copy?.slides?.[0] as CoverCopy | undefined)?.brand}
-          />
+          {/* Baked cards: the Korean text is rendered INTO each image and the
+              OCR gate verified it, so CardPreview shows the finished pixels
+              as-is (no CSS text overlay — that would double the text). The deck
+              is the fan-out result: one rendered card per slide. */}
+          {done.cards && done.cards.length > 0 ? (
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
+              {done.cards.map((card) => {
+                const cover = (card.copy ?? {}) as CoverCopy;
+                return (
+                  <figure key={card.index} style={{ margin: 0 }}>
+                    <CardPreview
+                      imageB64={card.card_image_b64 ?? null}
+                      cover={cover}
+                      brand={cover.brand}
+                    />
+                    <figcaption style={{ color: '#888', fontSize: 12, marginTop: 4 }}>
+                      슬라이드 {card.index + 1}
+                      {card.role ? ` · ${card.role}` : ''}
+                      {typeof card.score === 'number' ? ` · 점수 ${card.score}` : ''}
+                      {typeof card.text_score === 'number' ? ` · 글자 ${card.text_score}` : ''}
+                    </figcaption>
+                  </figure>
+                );
+              })}
+            </div>
+          ) : (
+            <CardPreview
+              imageB64={done.card_image_b64 ?? null}
+              cover={(done.copy?.slides?.[0] ?? {}) as CoverCopy}
+              brand={(done.copy?.slides?.[0] as CoverCopy | undefined)?.brand}
+            />
+          )}
           {!done.card_image_b64 && (
             <p style={{ color: '#999', marginTop: 8, fontSize: 12 }}>
               (완성 카드 없음 — OPENAI_API_KEY 미설정 시 카피 오버레이만 미리보기)

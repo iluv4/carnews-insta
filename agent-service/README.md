@@ -14,28 +14,49 @@ two talk over HTTP/SSE.
 ## The graph
 
 ```
-planner → retriever → copywriter → designer → image_gen → ocr_gate → art_director
-                          ▲                                               │
-                          └─────────────────── reviser ◄──────────────────┘   (loop)
-                                                  │
-                                                 END   (scores ≥ thresholds or max revisions)
+planner → budgeter → retriever → copywriter ─┬─▶ render_slide ─┐
+                                             ├─▶ render_slide ─┼─▶ collect → END
+                                             └─▶ render_slide ─┘
+                                              (one branch per slide, in parallel)
+
+each render_slide branch:
+    designer → image_gen → ocr_gate → art_director
+        ▲                                  │
+        └─────────── reviser ◄─────────────┘   (loop until BOTH scores clear)
 ```
 
 | Node | Model | Job |
 |------|-------|-----|
 | `planner` | GPT-5.5 | topic → per-slide role + intent |
+| `budgeter` | GPT-5.5 / heuristic | **Test-Time Scaling**: difficulty → inference budget (Best-of-N count + revision ceiling) |
 | `retriever` | embeddings | **RAG**: top-k similar real templates (pgvector or in-process) |
-| `copywriter` | GPT-5.5 | slide copy, grounded in retrieved exemplars |
-| `designer` | GPT-5.5 | full-card prompt that **bakes the exact Korean copy into the image** (names the literal strings to render) |
-| `image_gen` | **gpt-image-2** | renders the finished card — headline/bullets/footer baked in, not a separate text layer |
-| `ocr_gate` | GPT-5.5 vision | transcribes the rendered text and **diffs it against the intended copy** (`difflib`); numbers/dates/URLs are a hard fail. The safety net that makes baking text safe |
-| `art_director` | GPT-5.5 vision | scores the finished card for legibility/correctness/composition (requires the baked text, no longer penalises it) |
-| `reviser` | — | merges the OCR gate's + critic's fixes into next-pass instructions, loops back |
+| `copywriter` | GPT-5.5 | **Best-of-N self-consistency** copy for every slide, grounded in retrieved exemplars |
+| *(fan-out)* | — | `Send` dispatches one `render_slide` branch per slide, run in parallel |
+| `render_slide` | — | one card end-to-end (designer → image_gen → ocr_gate → art_director → reviser loop) |
+| └ `designer` | GPT-5.5 | full-card prompt that **bakes the exact Korean copy into the image** (names the literal strings to render) |
+| └ `image_gen` | **gpt-image-2** | renders the finished card — headline/bullets/footer baked in, not a separate text layer |
+| └ `ocr_gate` | GPT-5.5 vision | transcribes the rendered text and **diffs it against the intended copy** (`difflib`); numbers/dates/URLs are a hard fail. The safety net that makes baking text safe |
+| └ `art_director` | GPT-5.5 vision | scores the finished card on a **5-axis weighted rubric** (composition / readability / color_mood / cleanliness / text_quality); aggregated deterministically in Python so the gate is stable and explainable |
+| └ `reviser` | — | merges the OCR gate's + critic's fixes into next-pass instructions, loops back |
+| `collect` | — | fans the finished cards back in, ordered (deck score = weakest slide) |
 
-The `… → ocr_gate → art_director → reviser → designer` cycle is the point: a
-one-shot generator can't self-correct. The loop gates on **two** signals —
-text fidelity (`ocr_gate`) and aesthetics (`art_director`) — and re-renders until
-both clear their thresholds (`AGENT_TEXT_THRESHOLD`, `AGENT_QUALITY_THRESHOLD`).
+Four things are the point here:
+
+1. The per-card `… → ocr_gate → art_director → reviser → designer` **cycle** — a
+   one-shot generator can't self-correct; each branch re-renders until its card
+   clears the quality bar.
+2. **Baked-in text + OCR gate**: the Korean copy is rendered *into* the image (no
+   client overlay, so no double text), and the loop gates on **two** signals —
+   text fidelity (`ocr_gate`) and aesthetics (`art_director`) — re-rendering until
+   both clear their thresholds (`AGENT_TEXT_THRESHOLD`, `AGENT_QUALITY_THRESHOLD`).
+3. The **fan-out**: `num_slides` slides are rendered as parallel `render_slide`
+   branches (LangGraph's `Send` map-reduce), so an N-slide deck costs roughly the
+   wall-clock time of one card instead of N.
+4. **Test-Time Scaling (no GPU)**: `budgeter` + Best-of-N self-consistency raise
+   quality with inference compute alone — and *budget forcing* (S1) spends that
+   compute proportional to topic difficulty. See
+   [`docs/AGENT_ARCHITECTURE.md`](../docs/AGENT_ARCHITECTURE.md#test-time-scaling-no-gpu)
+   and `app/tts.py`.
 
 ## Run
 
@@ -54,7 +75,25 @@ RAG), so `GET /healthz`, `GET /rag/info`, and `POST /generate` all work in dev.
 - `GET /healthz` — liveness + which models/back-ends are active
 - `GET /rag/info` — templates indexed + retrieval backend
 - `POST /generate` — `{ "topic", "num_slides", "brand?", "audience?", "render_image?" }`
-  → **SSE** stream: `start` → `node` (one per graph step) → `done`
+  → **SSE** stream: `start` → `node` (one per graph step; `render_slide` fires
+  once per slide) → `done`. The `done` payload carries `cards` — the full deck,
+  one rendered background per slide — plus a cover-based single-card view
+  (`card_image_b64`, `score`, …) kept for backward compatibility.
+- `POST /analyze` — `{ "image" }` (base64 / data URL) → reads the **Korean text**
+  (OCR) and describes the **layout** of a reference card as structured JSON
+  (`text_blocks`, `layout`, `summary`). A *perception* task, so it runs on
+  GPT-5.5 by default but **flips to Qwen3-VL** (or any OpenAI-compatible VLM)
+  by setting `AGENT_ANALYZE_MODEL` / `AGENT_ANALYZE_BASE_URL` / `AGENT_ANALYZE_API_KEY`
+  — no GPU on your side, so Railway stays CPU-only.
+
+## Eval
+
+A small harness scores the Art Director critic — see [`eval/`](eval/README.md):
+
+```bash
+python eval/run_eval.py --self-test                              # deterministic, no key (CI)
+python eval/run_eval.py --cases eval/cases.sample.jsonl --out eval/report.md   # real images
+```
 
 ## Tests
 
