@@ -25,11 +25,14 @@ class Settings(BaseModel):
     image_model: str = os.getenv("AGENT_IMAGE_MODEL", "gpt-image-2")
     image_size: str = os.getenv("AGENT_IMAGE_SIZE", "1024x1536")  # 2:3 card
     # gpt-image-2 quality: low|medium|high|auto. "high" runs the deepest
-    # inference path → sharpest detail and best Korean text rendering.
-    image_quality: str = os.getenv("AGENT_IMAGE_QUALITY", "high")
+    # inference path (best Korean detail) BUT can take 100-200s+ per image —
+    # too slow for the synchronous /generate request once the revision loop
+    # re-renders. "medium" is the sane default that actually completes; bump to
+    # "high" only with an async/job pipeline (or a much longer route timeout).
+    image_quality: str = os.getenv("AGENT_IMAGE_QUALITY", "medium")
     # Reasoning effort for GPT-5 family text/vision calls: none|low|medium|high|
-    # xhigh. Quality-first default "high" — more reasoning → better copy and a
-    # sharper art-direction critique, at higher token cost.
+    # xhigh. "high" = sharper copy/critique at higher latency. Text/vision calls
+    # are far cheaper latency-wise than image gen, so this stays high.
     reasoning_effort: str = os.getenv("AGENT_REASONING_EFFORT", "high")
     embed_model: str = os.getenv("AGENT_EMBED_MODEL", "text-embedding-3-large")
     # Optional OpenAI-compatible base URL. Routes every call through a gateway or
@@ -66,7 +69,11 @@ class Settings(BaseModel):
     # The Art Director critique → Reviser loop runs until the score clears the
     # threshold or we hit max_revisions. This is the core "self-improving" loop.
     quality_threshold: float = float(os.getenv("AGENT_QUALITY_THRESHOLD", "8.0"))
-    max_revisions: int = int(os.getenv("AGENT_MAX_REVISIONS", "2"))
+    # Each revision re-renders the (slow) image, so the worst case is
+    # (1 + max_revisions) image generations inside one request. Default 1 to
+    # keep total latency inside the route timeout; raise it with an async
+    # pipeline.
+    max_revisions: int = int(os.getenv("AGENT_MAX_REVISIONS", "1"))
 
     # --- Test-Time Scaling (TTS) ---
     # These spend *inference* compute (not training / GPU) to raise quality:
